@@ -1,0 +1,2671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kosova Banking System — Bank by Bank B³</title>
+<style>
+  /* Two themes, one token set.
+     The default is McKinsey house style - deep-navy ink on a light ground -
+     because that is what survives print, projection and office lighting. Dark
+     is offered for long screen sessions and is a straight token swap: no
+     layout, no geometry and no chart logic changes with it.
+     The dark block is scoped to @media screen, so a printout is always the
+     light theme no matter what is on screen. */
+  :root{
+    --bg:#f2f5f8; --panel:#ffffff; --panel2:#eaeff5; --line:#d3dce6;
+    --txt:#051c2c; --muted:#5a6b7b; --accent:#2251ff; --accent2:#00857d;
+    --warn:#8a6100; --bad:#c8102e; --grid:#e6ecf2; --brk:#c8102e;
+    --hdbg:#051c2c; --hdtx:#ffffff; --hdsub:#a9bccd;
+    --hov:#9fb0c4; --onbg:#e8eeff; --rowhov:#f1f6fc;
+    --wbg:#fdf7e6; --wln:#e5d3a1; --wbg2:#f6ead0;
+    --ansbg:rgba(34,81,255,.09);
+    --tipbg:#051c2c; --tiptx:#ffffff; --tipsh:0 6px 20px rgba(5,28,44,.28);
+  }
+  @media screen{
+    :root[data-theme="dark"]{
+      --bg:#0b1017; --panel:#121a24; --panel2:#18222f; --line:#233042;
+      --txt:#e6edf5; --muted:#8fa3ba; --accent:#4cc4ff; --accent2:#7ee787;
+      --warn:#ffb454; --bad:#ff6b6b; --grid:#1e2a38; --brk:#ff8fa3;
+      --hdbg:#101823; --hdtx:#e6edf5; --hdsub:#8fa3ba;
+      --hov:#3a5372; --onbg:#16283a; --rowhov:#16202c;
+      --wbg:#1b1508; --wln:#4a3a12; --wbg2:#2a2009;
+      --ansbg:rgba(76,196,255,.10);
+      --tipbg:#05090f; --tiptx:#e6edf5; --tipsh:0 4px 16px rgba(0,0,0,.5);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-padding-top:var(--stick,152px)}
+  body{margin:0;background:var(--bg);color:var(--txt);
+       font:14px/1.45 "Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  /* Title block and the filter bar stay pinned: every chart below is read
+     "as of" the period, bank pair and metric chosen up here, so the reader
+     must never have to scroll back to find out what they are looking at.
+     --hdh / --stick are measured in JS (stick()) because the header and the
+     control row both re-wrap with viewport width. */
+  header{padding:20px 28px;background:var(--hdbg);color:var(--hdtx);
+         border-bottom:3px solid var(--accent);
+         position:sticky;top:0;z-index:30}
+  h1{margin:0;font-size:20px;letter-spacing:.3px}
+  .sub{color:var(--hdsub);font-size:12px;margin-top:4px}
+  .wrap{padding:20px 28px;max-width:1680px;margin:0 auto}
+  .controls{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;
+            position:sticky;top:var(--hdh,88px);z-index:29;
+            background:var(--bg);border-bottom:1px solid var(--line);
+            margin:-20px -28px 16px;padding:20px 28px 12px}
+  .ctl label,.ctl .lbl{display:block;font-size:11px;text-transform:uppercase;
+             letter-spacing:.6px;color:var(--muted);margin-bottom:5px}
+  /* Pinned chrome costs viewport, so once the reader has scrolled past the
+     title it collapses to a single line: the filters are the part that has to
+     stay reachable, the provenance sub-line is read once. No transition - the
+     height is measured immediately after the toggle, and an animated box would
+     be measured mid-flight. */
+  :root[data-scrolled="1"] header{padding:7px 28px}
+  :root[data-scrolled="1"] h1{font-size:14px}
+  :root[data-scrolled="1"] .sub{display:none}
+  :root[data-scrolled="1"] .controls{padding-top:10px}
+  :root[data-scrolled="1"] .ctl label,
+  :root[data-scrolled="1"] .ctl .lbl{margin-bottom:2px}
+  .ctl .grp{display:flex}
+  .ctl .grp button{border-radius:0}
+  .ctl .grp button:first-child{border-radius:6px 0 0 6px}
+  .ctl .grp button:last-child{border-radius:0 6px 6px 0}
+  .ctl .grp button+button{border-left:none}
+  .spacer{flex:1}
+  select,button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+         border-radius:6px;padding:7px 10px;font-size:13px;font-family:inherit}
+  button{cursor:pointer}
+  button:hover{border-color:var(--hov)}
+  button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);
+         background:var(--onbg)}
+  .banner{display:flex;gap:10px;align-items:flex-start;background:var(--wbg);
+          border:1px solid var(--wln);border-left:3px solid var(--warn);
+          border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12.5px}
+  .banner b{color:var(--warn)}
+  .banner .x{margin-left:auto;background:none;border:none;color:var(--muted);
+             padding:0 4px;font-size:15px;line-height:1;flex:none}
+  .banner #go-latest{border:1px solid var(--warn);color:var(--warn);
+             border-radius:5px;padding:3px 9px;font-size:11.5px;
+             white-space:nowrap;align-self:center}
+  .banner #go-latest:hover{background:var(--wbg2)}
+  .kpis{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));
+        gap:7px;margin-bottom:6px}
+  @media(max-width:1500px){.kpis{grid-template-columns:repeat(5,minmax(0,1fr))}}
+  @media(max-width:820px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+       padding:8px 9px;min-width:0}
+  .kpi .k{font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;
+          color:var(--muted);display:flex;align-items:center;gap:4px;
+          white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .v{font-size:16px;font-weight:600;margin-top:3px;
+          font-variant-numeric:tabular-nums;white-space:nowrap}
+  .kpi .d{font-size:9.5px;margin-top:1px;color:var(--muted);white-space:nowrap;
+          overflow:hidden;text-overflow:ellipsis}
+  .kpi-basis{font-size:10.5px;color:var(--muted);margin-bottom:18px}
+  /* The governing thought. Sits above the numbers because a reader who only
+     reads one line should get the conclusion, not an input to it. */
+  .answer{background:linear-gradient(90deg,var(--ansbg),transparent 70%);
+          border-left:3px solid var(--accent);border-radius:0 8px 8px 0;
+          padding:11px 16px;margin-bottom:10px}
+  .answer .a{font-size:15px;font-weight:600;line-height:1.4}
+  .answer .b{font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5}
+  @media(max-width:820px){.answer .a{font-size:13.5px}}
+  .up{color:var(--accent2)} .down{color:var(--bad)}
+  .info{display:inline-flex;width:13px;height:13px;border-radius:50%;
+        border:1px solid var(--muted);color:var(--muted);font-size:9px;
+        align-items:center;justify-content:center;cursor:help;flex:none}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(12,1fr)}
+  .sec{margin:26px 0 12px;display:flex;align-items:baseline;gap:12px;
+       border-bottom:1px solid var(--line);padding-bottom:7px}
+  .sec h2{margin:0;font-size:14px;letter-spacing:.4px}
+  .sec span{color:var(--muted);font-size:11.5px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+        padding:14px 16px 10px;position:relative}
+  .card h2{margin:0 0 2px;font-size:13px;letter-spacing:.4px;padding-right:200px}
+  .card .hint{color:var(--muted);font-size:11px;margin-bottom:8px}
+  .card .tools{position:absolute;top:11px;right:12px;display:flex;gap:5px}
+  .card .tools button{padding:3px 7px;font-size:10.5px;color:var(--muted)}
+  .c12{grid-column:span 12} .c8{grid-column:span 8} .c6{grid-column:span 6}
+  .c4{grid-column:span 4}
+  @media(max-width:1150px){.c8,.c6,.c4{grid-column:span 12}}
+  svg{display:block;width:100%;overflow:visible}
+  .ax{fill:var(--muted);font-size:10.5px}
+  .axb{fill:var(--txt);font-size:10.5px;font-weight:600}
+  .gl{stroke:var(--grid);stroke-width:1}
+  .empty{color:var(--muted);font-size:12px;padding:46px 12px;text-align:center;
+         border:1px dashed var(--line);border-radius:8px}
+  table{width:100%;border-collapse:separate;border-spacing:0;
+        font-variant-numeric:tabular-nums}
+  th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);
+        white-space:nowrap;font-size:12.5px}
+  /* top:0, NOT the frozen-chrome offset. `.scroll` sets overflow-x, which
+     forces overflow-y to compute to auto, so this cell's sticky container is
+     the .scroll box - not the viewport. Offsetting it by the header height
+     shoved the whole header row down inside a box that never scrolls
+     vertically, and it landed on top of the first data rows. */
+  thead th{color:var(--muted);font-weight:600;font-size:11px;
+     text-transform:uppercase;letter-spacing:.5px;cursor:pointer;
+     position:sticky;top:0;z-index:2;background:var(--panel)}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;
+     background:var(--panel);z-index:1;border-right:1px solid var(--line)}
+  thead th:first-child{z-index:3}
+  tbody tr:hover td,tbody tr:hover th{background:var(--rowhov)}
+  tr.tot td{font-weight:700;border-top:2px solid var(--line);background:var(--panel2)}
+  tr.tot td:first-child{background:var(--panel2)}
+  /* Brand chip in the first column. The bank's name sits immediately to its
+     right, so the chip is decoration that aids recognition, never the thing
+     carrying the identity - hence aria-hidden on the markup. Fixed width so
+     the names still line up. */
+  .bdg{display:inline-flex;align-items:center;justify-content:center;
+     width:31px;height:17px;margin-right:7px;border-radius:3px;
+     vertical-align:-3px;overflow:hidden;
+     font:700 9.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;
+     letter-spacing:.02em;border:1px solid var(--line)}
+  .bdg img{width:100%;height:100%;object-fit:contain}
+  /* The detail table is meant to be read whole. Tight typography plus the
+     "key columns" default puts every bank and every headline measure on one
+     screen; the horizontal rule stays only as a fallback for narrow devices
+     and for the optional all-columns view. */
+  .scroll{overflow-x:auto}
+  #tbl th,#tbl td{padding:5px 6px;font-size:11.5px}
+  #tbl thead th{font-size:10px;letter-spacing:.4px}
+  .lg{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 8px}
+  .lg button{background:none;border:1px solid transparent;color:var(--muted);
+    padding:2px 6px;border-radius:4px;font-size:11px;display:inline-flex;
+    align-items:center;gap:5px}
+  .lg button:hover:not(:disabled){border-color:var(--line);color:var(--txt)}
+  .lg button[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
+  .lg i{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none}
+  .gaps{background:var(--panel);border:1px solid var(--line);
+        border-left:3px solid var(--muted);border-radius:8px;padding:12px 16px;
+        font-size:12px;color:var(--muted);margin-top:16px}
+  .gaps b{color:var(--txt)}
+  .gaps ul{margin:6px 0 0;padding-left:18px;columns:3;font-size:11.5px}
+  @media(max-width:900px){.gaps ul{columns:1}}
+
+  /* headline strip - the shareable read of the period.
+     Auto-flow by column so however many headlines the data produces, they stay
+     on one line and share the width evenly. minmax(0,1fr) is what stops long
+     words from forcing a column wider than its share. */
+  .heads{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);
+         gap:8px;margin-bottom:6px}
+  .head{background:var(--panel);border:1px solid var(--line);
+        border-left:3px solid var(--accent);border-radius:8px;padding:8px 10px;
+        min-width:0;overflow-wrap:anywhere}
+  .head.good{border-left-color:var(--accent2)}
+  .head.bad{border-left-color:var(--bad)}
+  .head.warn{border-left-color:var(--warn)}
+  .head .t{font-size:8.5px;text-transform:uppercase;letter-spacing:.4px;
+           color:var(--muted);white-space:nowrap;overflow:hidden;
+           text-overflow:ellipsis}
+  .head .m{font-size:11.5px;font-weight:600;margin-top:3px;line-height:1.3}
+  .head .s{font-size:9.5px;color:var(--muted);margin-top:3px;line-height:1.35}
+  /* Below roughly 1400px a single row would squeeze past readability, so let it
+     wrap rather than shrink the text further. */
+  @media(max-width:1400px){
+    .heads{grid-auto-flow:row;grid-template-columns:repeat(4,minmax(0,1fr))}
+  }
+  @media(max-width:1000px){
+    .heads{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .head .m{font-size:12.5px} .head .s{font-size:10.5px}
+  }
+  @media(max-width:620px){.heads{grid-template-columns:minmax(0,1fr)}}
+  .head-tools{display:flex;gap:6px;margin:8px 0 20px}
+
+  /* sourced context from the Kosovo Banker yearbooks */
+  .ctx{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));
+       gap:10px;margin-top:16px}
+  .ctxi{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+        padding:10px 13px}
+  .ctxi .cv{font-size:17px;font-weight:600;color:var(--accent)}
+  .ctxi .cl{font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+            color:var(--muted)}
+  .ctxi .cn{font-size:11px;margin-top:4px;line-height:1.4}
+  .ctxi .cs{font-size:10px;color:var(--muted);margin-top:4px;font-style:italic}
+  footer{color:var(--muted);font-size:11px;padding:18px 28px 40px;line-height:1.7}
+  footer b{color:var(--txt)}
+  .tip{position:fixed;pointer-events:none;background:var(--tipbg);
+       color:var(--tiptx);border:1px solid var(--tipbg);border-radius:6px;
+       padding:6px 9px;font-size:12px;opacity:0;transition:opacity .1s;
+       z-index:50;white-space:pre;max-width:300px;box-shadow:var(--tipsh)}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;
+      clip:rect(0 0 0 0);white-space:nowrap}
+  @media print{
+    /* The dark theme is screen-only, so the page chrome already prints light.
+       Chart ink is set as SVG attributes rather than CSS, so `printLight()`
+       re-renders the charts in light ink before the dialog opens. */
+    :root{--bg:#fff;--panel:#fff;--panel2:#f4f6f8;--line:#c9d3de}
+    body{background:#fff}
+    header{background:#fff;color:var(--txt);border-bottom:2px solid var(--txt);
+           position:static;padding:20px 28px}
+    h1{font-size:20px} .sub{display:block;color:var(--muted)}
+    thead th{position:static}
+    .controls,.card .tools,.banner .x{display:none}
+    .card,.kpi{break-inside:avoid;page-break-inside:avoid}
+    .scroll{overflow:visible}
+    .c8,.c6,.c4{grid-column:span 12}
+  }
+</style>
+</head>
+<body>
+<header id="hd">
+  <h1>Kosova Banking System — Bank by Bank B³</h1>
+  <div class="sub" id="coverage"></div>
+</header>
+
+<div class="wrap">
+  <div class="controls" id="controls">
+    <div class="ctl"><label for="period">Reporting period</label>
+      <div class="grp">
+        <select id="period" style="border-radius:6px 0 0 6px"></select
+        ><button id="latest" title="Jump back to the most recent release"
+          style="border-radius:0 6px 6px 0;border-left:none">Latest</button>
+      </div>
+    </div>
+    <div class="ctl"><span class="lbl" id="freq-lbl">Period type</span>
+      <div class="grp" role="group" aria-labelledby="freq-lbl">
+        <button data-f="ALL" aria-pressed="true">All</button
+        ><button data-f="Q" aria-pressed="false">Quarter-ends</button
+        ><button data-f="M" aria-pressed="false">Monthly</button>
+      </div>
+    </div>
+    <div class="ctl"><label for="metric">Ranking metric</label>
+      <select id="metric"></select></div>
+    <div class="ctl"><label for="bank">Bank A</label>
+      <select id="bank"></select></div>
+    <div class="ctl"><label for="bank2">Bank B</label>
+      <select id="bank2"></select></div>
+    <div class="spacer"></div>
+    <div class="ctl"><span class="lbl" id="theme-lbl">Theme</span>
+      <div class="grp" role="group" aria-labelledby="theme-lbl">
+        <button data-theme="light" aria-pressed="true"
+          title="McKinsey house style — the version that prints and projects">Light</button
+        ><button data-theme="dark" aria-pressed="false"
+          title="Dark canvas for long screen sessions. Printing always uses the light theme.">Dark</button>
+      </div>
+    </div>
+    <div class="ctl"><span class="lbl" id="exp-lbl">Export</span>
+      <div class="grp" role="group" aria-labelledby="exp-lbl">
+        <button id="exp-csv" title="Download the bank detail table for this period">CSV</button
+        ><button id="exp-all" title="Download the full multi-period panel">Full panel</button
+        ><button id="exp-print" title="Print or save as PDF">Print</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="breaks"></div>
+
+  <div class="sec"><h2>Headlines</h2><span id="head-sub"></span></div>
+  <div class="heads" id="heads"></div>
+  <div class="head-tools">
+    <button id="copy-heads">Copy headlines</button>
+    <button id="copy-link">Copy link to this view</button>
+  </div>
+
+  <div class="sec"><h2>The system</h2><span id="sys-sub"></span></div>
+  <div class="answer" id="answer"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="kpi-basis" id="kpi-basis"></div>
+
+  <div class="grid">
+    <div class="card c8">
+      <div class="tools">
+        <button data-mode="funding" aria-pressed="true">Funding</button
+        ><button data-mode="asset" aria-pressed="false">Assets</button>
+        <button class="png" data-png="ch-sys" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="sys-title">Banking system composition</h2>
+      <div class="hint" id="sys-hint"></div>
+      <div class="lg" id="lg-sys"></div>
+      <div id="ch-sys"></div>
+    </div>
+    <div class="card c4">
+      <div class="tools">
+        <button class="png" data-png="ch-hhi" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2>Concentration — total assets</h2>
+      <div class="hint">HHI against DoJ/FTC thresholds (left) · CR3 / CR5 dashed (right)</div>
+      <div class="lg" id="lg-hhi"></div>
+      <div id="ch-hhi"></div>
+    </div>
+
+    <div class="card c6">
+      <div class="tools">
+        <button class="png" data-png="ch-fund" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2>Funding dynamics — loans vs deposits</h2>
+      <div class="hint" id="fund-hint"></div>
+      <div class="lg" id="lg-fund"></div>
+      <div id="ch-fund"></div>
+    </div>
+    <div class="card c6">
+      <div class="tools">
+        <button data-share="lin" aria-pressed="true">Linear</button
+        ><button data-share="log" aria-pressed="false"
+          title="Log scale — the three smallest banks hold under 5% of assets and are unreadable on a linear axis">Log</button>
+        <button class="png" data-png="ch-share" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2>Market share of total assets</h2>
+      <div class="hint" id="share-hint"></div>
+      <div class="lg" id="lg-share"></div>
+      <div id="ch-share"></div>
+    </div>
+  </div>
+
+  <div class="sec"><h2>Bank versus bank</h2>
+    <span id="peer-sub"></span></div>
+  <div class="grid">
+    <div class="card c12">
+      <div class="tools">
+        <button data-tier="0" aria-pressed="true">All banks</button
+        ><button data-tier="1" aria-pressed="false">Same size tier</button>
+        <button class="png" data-png="ch-peer" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="peer-title">Head to head on core KPIs</h2>
+      <div class="hint">Each strip is the peer range · the darker band is
+        the middle 50% of banks · the notch is the median · a filled
+        marker beats the median on that measure</div>
+      <div id="ch-peer"></div>
+    </div>
+
+    <div class="card c6">
+      <div class="tools">
+        <button class="png" data-png="ch-eff" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="eff-title">Efficiency versus return</h2>
+      <div class="hint" id="eff-hint"></div>
+      <div id="ch-eff"></div>
+    </div>
+    <div class="card c6">
+      <div class="tools">
+        <button class="png" data-png="ch-bridge" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="bridge-title">Why the ROE gap</h2>
+      <div class="hint">ROE = net margin × income yield × leverage. Each bar is
+        one factor's contribution to the gap against the median bank. The blue
+        bar is the difference between this identity and KBA's own averaging
+        basis — typically well under half a point.</div>
+      <div id="ch-bridge"></div>
+    </div>
+
+    <div class="card c12">
+      <div class="tools">
+        <button class="png" data-png="ch-bump" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="bump-title">League table movement</h2>
+      <div class="hint" id="bump-hint"></div>
+      <div id="ch-bump"></div>
+    </div>
+  </div>
+
+  <!-- Risk context sits above the detail table, not below it. The ~2% sector
+       NPL and the coverage gaps are the most consequential facts on the page
+       and a reader who stops at the 23-column table would never reach them. -->
+  <div class="gaps" id="gaps"></div>
+  <div class="sec"><h2>What this data cannot tell you</h2>
+    <span>Sourced from the KBA <i>Kosovo Banker</i> yearbooks — narrative
+      editions that carry no bank-level ratio series</span></div>
+  <div class="ctx" id="ctx"></div>
+
+  <div class="sec"><h2>Rankings and detail</h2><span></span></div>
+  <div class="grid">
+    <div class="card c6">
+      <div class="tools">
+        <button class="png" data-png="ch-rank" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="rank-title">Bank ranking</h2>
+      <div class="hint" id="rank-hint"></div>
+      <div id="ch-rank"></div>
+    </div>
+    <div class="card c6">
+      <div class="tools">
+        <button class="png" data-png="ch-dupont" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="dupont-title">ROE decomposition</h2>
+      <div class="hint">Capital intensity (x) vs ROE (y) · dashed curves are
+        constant-ROA iso-lines · bubble area = total assets</div>
+      <div id="ch-dupont"></div>
+    </div>
+
+    <div class="card c12">
+      <div class="tools">
+        <button class="png" data-png="ch-drill" title="Download chart as PNG">PNG</button>
+      </div>
+      <h2 id="drill-title">Bank drill-down</h2>
+      <div class="hint">Indexed to the first available period in view = 100</div>
+      <div class="lg" id="lg-drill"></div>
+      <div id="ch-drill"></div>
+    </div>
+
+    <div class="card c12">
+      <div class="tools">
+        <button data-tbl="0" aria-pressed="true"
+          title="Every bank and every headline measure on one screen">Key columns</button
+        ><button data-tbl="1" aria-pressed="false"
+          title="Add the five secondary columns; the table then scrolls sideways">All columns</button>
+      </div>
+      <h2 id="tbl-title">Bank detail</h2>
+      <div class="hint" id="tbl-hint">Click a column header to sort. EUR values
+        are auto-scaled (k = thousand, m = million, bn = billion).</div>
+      <div class="scroll"><table id="tbl"></table></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div><b>Source</b> — Kosovo Banking Association: Monthly Reports on Financial
+  Statements &amp; Banking Statistics and Quarterly Banks' Financial Statements
+  &amp; Statistics reports. Figures are preliminary, IFRS-based and unaudited.</div>
+  <div><b>Method</b> — Income and profit are cumulative year-to-date and reset each
+  January, so they are not differenced against the prior period. ROA and ROE are as
+  published by KBA (annualised on a six-period average denominator). Equity/assets
+  is an unweighted leverage proxy, <b>not</b> a regulatory capital ratio. Bank
+  figures are published rounded to EUR thousands, so component sums can differ from
+  printed totals in the final digits.</div>
+  <div><b>Ranking</b> — Ranks are derived from reported total assets. KBA's printed
+  rank matches that ordering everywhere except 30/09/2024, where the published
+  table kept IS Bank at 9 and PriBank at 11 after PriBank had already overtaken it;
+  the printed value is retained in the data and shown on hover.</div>
+  <div><b>Comparability</b> — The panel mixes quarterly releases (2024–2025) with
+  monthly ones (2026), so consecutive periods are not equally spaced. Every
+  step-based figure in the exported panel carries a <code>step_months</code> column;
+  year-on-year figures are always month-matched and unaffected.</div>
+  <div id="gen"></div>
+</footer>
+
+<div class="tip" id="tip" role="tooltip" aria-hidden="true"></div>
+<div class="sr" id="live" aria-live="polite"></div>
+
+<script id="kba-data" type="application/json">/*__KBA_DATA__*/</script>
+<script>
+const DATA = JSON.parse(document.getElementById('kba-data').textContent);
+const ROWS = DATA.rows;
+const PERIODS = DATA.periods;
+const BANKS = DATA.banks;
+const CONC = DATA.concentration;
+const BREAKS = DATA.roster_changes || [];
+const DISPUTES = DATA.rank_disputes || [];
+
+/* ---------- theming ---------- */
+/* Chart ink cannot live in CSS: most of it is set as SVG presentation
+   attributes, which no stylesheet can reach. So both themes are declared here
+   and the CSS token block mirrors them. Two rules keep this honest:
+   the two palettes are hue-for-hue in the same order, so a bank keeps its
+   identity when the theme flips; and every entry has to clear 3:1 against its
+   own ground, because bank codes are drawn IN the series colour. */
+const THEMES = {
+  light:{
+    ground:'#ffffff',
+    pal:['#2251ff','#9a6f00','#0288d1','#c8102e','#00857d','#8c5af8',
+         '#c2621f','#3c7dd9','#a3437c','#6b3fa0','#5a6b7b'],
+    ink:{text:'#051c2c', muted:'#5a6b7b', rule:'#b7c3ce', grid:'#e6ecf2',
+         paper:'#ffffff', range:'#cbd6e2', iqr:'#9fb4c9', iso:'#c3cfdb',
+         isoTx:'#8b9aab', neutral:'#7a8a9a', soft:'#9fb4c9',
+         good:'#00857d', bad:'#c8102e', warn:'#8a6100', brk:'#c8102e'},
+  },
+  dark:{
+    ground:'#121a24',
+    pal:['#6f9bff','#ffcb6b','#4cc4ff','#ff7b8a','#59d9c1','#c792ea',
+         '#f78c6c','#82aaff','#e57eb3','#b78cf0','#9aa7b5'],
+    ink:{text:'#e6edf5', muted:'#8fa3ba', rule:'#4a5a6d', grid:'#1e2a38',
+         paper:'#121a24', range:'#2b3a4d', iqr:'#37506d', iso:'#3a5372',
+         isoTx:'#5b7ea8', neutral:'#8fa3ba', soft:'#5b7ea8',
+         good:'#7ee787', bad:'#ff6b6b', warn:'#ffb454', brk:'#ff8fa3'},
+  },
+};
+/* Both are mutated in place rather than reassigned, so every reference taken
+   at load time - colorOf, the STACKS lookups, the draw functions - keeps
+   working across a theme change without a reload. */
+const PAL = THEMES.light.pal.slice();
+const INK = Object.assign({}, THEMES.light.ink);
+
+/* ---------- bank brand colours ---------- */
+/* Every other number and label on this page is derived from the KBA releases.
+   This map is not. It is a hand-entered reading of each bank's public visual
+   identity, so it is the one thing here worth checking against the banks' own
+   material before quoting it. A code missing from the map falls back to the
+   generic palette, so a roster change degrades quietly instead of breaking. */
+const BRAND = {
+  RBKO:'#FFED00', NLB:'#00953B', PCB:'#00A0DF', BKT:'#0B3B8C',
+  TEB:'#00954E',  ZIR:'#E30613', ISB:'#003399', CRD:'#C4161C',
+  BE:'#005B9A',   BPB:'#F58220', PRI:'#7A1F3D',
+};
+/* Bank logos are trademarks, and this file is meant to open offline from disk,
+   so it ships no artwork it has no licence to and hotlinks nothing. The chip
+   falls back to the bank's code. Drop paths or data URIs in here and they take
+   over the chip. */
+const LOGO = {};
+/* Two lookups, because the brand colour is doing two different jobs.
+   `brandOf` is the untouched brand, used only where the bank's name sits right
+   beside the swatch - the detail table - so a clash there costs nothing.
+   `colorOf` is the chart series colour, where the swatch can be the only thing
+   telling two lines apart, so it has to clear 3:1 on its own ground and stand
+   clear of every other bank. */
+const brandOf = {};
+const colorOf = {};
+
+function _ch(h){ return [1,3,5].map(i=>parseInt(h.slice(i,i+2),16)); }
+function _hex(a){ return '#'+a.map(v=>Math.max(0,Math.min(255,Math.round(v)))
+  .toString(16).padStart(2,'0')).join(''); }
+function _lum(h){
+  const c=_ch(h).map(function(v){ const s=v/255;
+    return s<=0.03928 ? s/12.92 : Math.pow((s+0.055)/1.055,2.4); });
+  return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2];
+}
+function contrast(a,b){
+  const x=_lum(a), y=_lum(b);
+  return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05);
+}
+/* CIE L*, not raw luminance. Two colours 0.02 apart in luminance are miles
+   apart at the dark end and identical at the light end, so luminance is the
+   wrong ruler for "can a reader tell these two apart". */
+function lightness(h){
+  const y=_lum(h);
+  return y>0.008856 ? 116*Math.cbrt(y)-16 : 903.3*y;
+}
+function _mix(a,b,t){
+  const x=_ch(a), y=_ch(b);
+  return _hex(x.map((v,i)=>v+(y[i]-v)*t));
+}
+function hueOf(h){
+  const c=_ch(h).map(v=>v/255);
+  const mx=Math.max.apply(null,c), mn=Math.min.apply(null,c), d=mx-mn;
+  if(d<0.04) return null;                 /* grey has no meaningful hue */
+  const x = mx===c[0] ? ((c[1]-c[2])/d)%6
+          : mx===c[1] ? (c[2]-c[0])/d+2
+          :             (c[0]-c[1])/d+4;
+  return ((x*60)+360)%360;
+}
+function hueGap(a,b){
+  if(a==null||b==null) return 999;
+  const d=Math.abs(a-b);
+  return Math.min(d,360-d);
+}
+/* Kosovo's banks cluster hard by hue - four blues, two greens, two reds - so
+   the brand colours as published collide badly: eight unreadable pairs on
+   white, and NLB and TEB, the second and fourth largest banks, land 8 degrees
+   and 0.002 luminance apart. Mixing toward black or white shifts lightness
+   while holding hue to within a degree, so each bank is walked to the NEAREST
+   shade that clears the contrast floor and stands clear of everything already
+   placed. Nearest, not furthest: a bank with no neighbour keeps its true
+   colour, and one that must move moves as little as it can. */
+function separate(brand,ground,taken){
+  const cands=[{c:brand,d:0}];
+  for(let i=1;i<=100;i++) ['#000000','#ffffff'].forEach(function(to){
+    const c=_mix(brand,to,i/100);
+    cands.push({c:c,d:Math.abs(lightness(c)-lightness(brand))});
+  });
+  cands.sort((a,b)=>a.d-b.d);
+  for(const cand of cands){
+    if(contrast(cand.c,ground)<3) continue;
+    const clash=taken.some(t=>hueGap(hueOf(t),hueOf(cand.c))<30 &&
+      Math.abs(lightness(t)-lightness(cand.c))<12);
+    if(!clash) return cand.c;
+  }
+  return cands[cands.length-1].c;
+}
+/* Ground is passed rather than read off S, because this runs once at load time
+   to seed the default theme and S is not declared yet. */
+function paintBanks(ground){
+  const g=ground||THEMES.light.ground, taken=[];
+  /* Assigned largest first, so whoever a reader spends the most time on keeps
+     their true colour and the smallest banks absorb what moving is left.
+     Raiffeisen is the case that decides this: the lightest yellow that still
+     clears the contrast floor on white is already a long way from the brand,
+     and it should not additionally be shoved aside by a bank a tenth its
+     size that happened to sort earlier in the alphabet. */
+  const latest=PERIODS[PERIODS.length-1].as_of, size={};
+  ROWS.forEach(function(r){
+    if(r.as_of===latest && !r.is_total) size[r.bank_code]=r.total_assets||0;
+  });
+  BANKS.map((b,i)=>({b:b,i:i}))
+    .sort((x,y)=>(size[y.b.bank_code]||0)-(size[x.b.bank_code]||0))
+    .forEach(function(o){
+      const code=o.b.bank_code, seed=BRAND[code]||PAL[o.i%PAL.length];
+      brandOf[code]=seed;
+      colorOf[code]=separate(seed,g,taken);
+      taken.push(colorOf[code]);
+    });
+}
+/* Black or white on the chip, whichever the brand can actually carry. Chosen
+   by contrast rather than a luminance cutoff, so it is the call WCAG makes. */
+function inkOn(bg){
+  return contrast('#ffffff',bg)>=contrast('#111111',bg) ? '#ffffff' : '#111111';
+}
+function badge(code){
+  const bg=brandOf[code]||PAL[0];
+  const inner = LOGO[code] ? '<img src="'+LOGO[code]+'" alt="">' : code;
+  return '<span class="bdg" style="background:'+bg+';color:'+inkOn(bg)+
+    '" aria-hidden="true">'+inner+'</span>';
+}
+
+function applyTheme(name,redraw){
+  const t=THEMES[name]||THEMES.light;
+  S.theme = THEMES[name] ? name : 'light';
+  PAL.length=0; t.pal.forEach(c=>PAL.push(c));
+  Object.assign(INK,t.ink);
+  paintBanks(t.ground);
+  /* documentElement is what the CSS token block keys off. Guarded because the
+     headless harness runs the same code without a real document. */
+  try{ document.documentElement.setAttribute('data-theme',S.theme); }catch(e){}
+  if(redraw) render();
+}
+/* Chrome treats a file:// document as an opaque origin and throws on
+   localStorage, and this dashboard is meant to be opened straight off disk, so
+   the preference is best-effort rather than load-bearing. */
+function saveTheme(name){
+  try{ localStorage.setItem('kba-theme',name); }catch(e){}
+}
+function savedTheme(){
+  try{ return localStorage.getItem('kba-theme'); }catch(e){ return null; }
+}
+/* A dark printout wastes toner and reads badly, and the whole point of the
+   light theme is that it survives paper. Both the Print button and Ctrl+P
+   therefore drop to light for the duration and restore afterwards. */
+let printRestore=null;
+function printLight(){
+  const back = S.theme!=='light' ? S.theme : null;
+  if(back) applyTheme('light',true);
+  try{ print(); } finally { if(back) applyTheme(back,true); }
+}
+/* Seed the bank colours for the default theme. `applyTheme` cannot run here -
+   it writes to S, which is declared below - so init() makes the real call once
+   the saved preference and the URL have been read. */
+paintBanks(THEMES.light.ground);
+
+const RANK_METRICS = [
+  ['total_assets','Total Assets','eur'],
+  ['loans_net','Loans (net)','eur'],
+  ['deposits','Deposits','eur'],
+  ['equity_capital','Equity Capital','eur'],
+  ['investments_securities','Investments in Securities','eur'],
+  ['placement_with_banks','Placement with Banks','eur'],
+  ['total_income','Total Income (YTD)','eur'],
+  ['net_profit','Net Profit (YTD)','eur'],
+  ['roe','ROE','pct'],
+  ['roa','ROA','pct'],
+  ['expense_burden','Cost & provision burden','pct'],
+  ['net_margin','Net margin','pct'],
+  ['income_yield','Income yield on assets','pct'],
+  ['loan_to_deposit','Loan / Deposit','pct'],
+  ['equity_ratio','Equity / Assets','pct'],
+  ['leverage','Leverage','x'],
+  ['employees','Employees','num'],
+  ['branches','Branches','num'],
+  ['assets_per_employee','Assets per Employee','eur'],
+  ['total_assets_ytd_pct','Asset growth YTD','pct'],
+];
+
+/* ---------- state ---------- */
+const S = {freq:'ALL', period:null, metric:'total_assets', bank:'',
+           bank2:'', sysMode:'funding', shareOff:new Set(), sysOff:new Set(),
+           brkDismissed:false, pinned:false, peerTier:false, shareLog:false,
+           tblAll:false, theme:'light', sort:['total_assets',-1]};
+
+/* Core measures used for the head-to-head strips. `hi` marks whether a higher
+   value is the better outcome; loan/deposit and leverage are deliberately
+   neutral because more is not better, it is just more risk. The growth row is
+   resolved at draw time because the available basis changes with the period. */
+const PEER_KPIS = [
+  ['total_assets','Total assets','eur',1],
+  ['market_share_assets','Market share','pct',1],
+  ['__growth__','Asset growth','pct',1],
+  ['roe','ROE','pct',1],
+  ['roa','ROA','pct',1],
+  ['expense_burden','Cost & provision burden','pct',0],
+  ['net_margin','Net margin','pct',1],
+  ['income_yield','Income yield on assets','pct',1],
+  ['loan_to_deposit','Loan / deposit','pct',null],
+  ['equity_ratio','Equity / assets','pct',1],
+  ['leverage','Leverage','x',null],
+  ['assets_per_employee','Assets per employee','eur',1],
+];
+
+/* ---------- formatting ---------- */
+const nf = (v,d=1)=> v==null||isNaN(v) ? '–' :
+  v.toLocaleString('en-GB',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct  = v => v==null||isNaN(v)?'–':nf(v,1)+'%';
+const int  = v => v==null||isNaN(v)?'–':Math.round(v).toLocaleString('en-GB');
+
+/* Auto-scaled so a 1.9bn bank never reads as "1,921.2 m". */
+function eur(v){
+  if(v==null||isNaN(v)) return '–';
+  const a=Math.abs(v);
+  if(a>=1e9) return nf(v/1e9,2)+' bn';
+  if(a>=1e6) return nf(v/1e6,1)+' m';
+  if(a>=1e3) return nf(v/1e3,0)+' k';
+  return nf(v,0);
+}
+const eurBn = v => v==null||isNaN(v)?'–':nf(v/1e9,2)+' bn';
+function fmt(v,kind){
+  if(v==null||isNaN(v)) return '–';
+  if(kind==='eur') return eur(v);
+  if(kind==='pct') return pct(v);
+  if(kind==='x')   return nf(v,2)+'\u00d7';
+  return int(v);
+}
+
+/* ---------- data helpers ---------- */
+/* `frequency` records which release a period came from, not what the period is.
+   March and June 2026 are quarter-ends that happen to be published in monthly
+   reports, so filtering on frequency alone silently dropped them from the
+   quarterly view and broke the continuity of every quarterly series. Filter on
+   the calendar instead. */
+function periodsFiltered(){
+  if(S.freq==='Q') return PERIODS.filter(p=>p.is_quarter_end);
+  if(S.freq==='M') return PERIODS.filter(p=>p.frequency==='M');
+  return PERIODS;
+}
+const rowsAt = d => ROWS.filter(r=>r.as_of===d);
+/* Ordered by the derived asset rank, not the rank KBA printed. The two agree
+   everywhere except 2024-09-30, where the published table left IS Bank at 9 and
+   PriBank at 11 after PriBank had already overtaken it. */
+const banksAt = d => rowsAt(d).filter(r=>!r.is_total)
+                              .sort((a,b)=>(a.rank_assets??99)-(b.rank_assets??99));
+const totalAt = d => rowsAt(d).find(r=>r.is_total) || {};
+const seriesFor = code => ROWS.filter(r=>r.bank_code===code)
+  .filter(r=>periodsFiltered().some(p=>p.as_of===r.as_of))
+  .sort((a,b)=>a.as_of<b.as_of?-1:1);
+
+/* Peer distribution for one measure at one date.
+   `tier` scopes the comparison to banks of similar size. A EUR 133m bank and a
+   EUR 2.0bn bank are 15x apart and the tail carries under 5% of system assets,
+   so one sector-wide median flatters the small banks on ratios that scale and
+   punishes them on ones that do not. */
+function spread(d,key,tier){
+  let pool=banksAt(d);
+  if(tier) pool=pool.filter(r=>r.size_tier===tier);
+  const v=pool.map(r=>r[key]).filter(x=>x!=null&&!isNaN(x))
+    .sort((a,b)=>a-b);
+  if(!v.length) return null;
+  const at=q=>{
+    const i=(v.length-1)*q, lo=Math.floor(i), hi=Math.ceil(i);
+    return v[lo]+(v[hi]-v[lo])*(i-lo);
+  };
+  return {min:v[0],max:v[v.length-1],q1:at(.25),med:at(.5),q3:at(.75),n:v.length};
+}
+/* Year-on-year is month-matched, so it is empty for 9 of the 15 periods -
+   including the latest release. Growth from the prior year-end exists wherever
+   a December has been published and is comparable across banks because they
+   share a base date, so it is the primary measure and YoY the bonus. */
+function growthMetric(d){
+  const b=banksAt(d);
+  const has=k=>b.some(r=>r[k]!=null&&!isNaN(r[k]));
+  if(has('total_assets_ytd_pct')){
+    const base=(b.find(r=>r.ytd_base_as_of)||{}).ytd_base_as_of;
+    const p=PERIODS.find(p=>p.as_of===d)||{};
+    return {key:'total_assets_ytd_pct',
+            label:'Asset growth YTD',
+            short:'YTD',
+            basis:'since '+(base?fmtDate(base):'the prior year-end')+
+                  (p.month?' ('+p.month+' month'+(p.month>1?'s':'')+')':'')};
+  }
+  if(has('total_assets_yoy_pct'))
+    return {key:'total_assets_yoy_pct',label:'Asset growth YoY',short:'YoY',
+            basis:'against the same month a year earlier'};
+  return null;
+}
+function fmtDate(iso){
+  const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const p=String(iso).split('-');
+  return p.length===3 ? p[2]+' '+M[+p[1]-1]+' '+p[0] : iso;
+}
+function bankRow(d,code){
+  return code ? rowsAt(d).find(r=>r.bank_code===code) : null;
+}
+
+function prevPeriod(d){
+  const ps = periodsFiltered(); const i = ps.findIndex(p=>p.as_of===d);
+  return i>0 ? ps[i-1].as_of : null;
+}
+/* "vs prior" changes meaning with the frequency toggle, so name the basis. */
+function deltaBasis(d){
+  const pv=prevPeriod(d); if(!pv) return null;
+  const a=PERIODS.find(p=>p.as_of===pv);
+  return a?a.period_label:null;
+}
+/* Roster breaks whose two sides are both inside the visible window. */
+function visibleBreaks(){
+  const ps=periodsFiltered().map(p=>p.as_of);
+  return BREAKS.filter(b=>ps.includes(b.as_of)&&ps.includes(b.prev_as_of));
+}
+function breakLabel(b){
+  const bits=[];
+  if(b.exited.length)  bits.push(b.exited.join(', ')+' leaves the reporting population');
+  if(b.entered.length) bits.push(b.entered.join(', ')+' joins the reporting population');
+  return bits.join('; ');
+}
+
+/* ---------- tiny SVG chart kit ---------- */
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(NS,n);
+  for(const k in a) e.setAttribute(k,a[k]); return e;};
+const txt=(n,a,s)=>{const e=el(n,a); e.textContent=s; return e;};
+
+const tip=document.getElementById('tip');
+function showTip(e,text){
+  tip.textContent=text; tip.style.opacity=1;
+  tip.setAttribute('aria-hidden','false');
+  /* Clamp inside the viewport so edge points stay readable. */
+  const pad=14, w=tip.offsetWidth||240, h=tip.offsetHeight||70;
+  let x=e.clientX+pad, y=e.clientY+pad;
+  if(x+w>innerWidth-8)  x=e.clientX-w-pad;
+  if(y+h>innerHeight-8) y=e.clientY-h-pad;
+  tip.style.left=Math.max(8,x)+'px'; tip.style.top=Math.max(8,y)+'px';
+}
+function hideTip(){tip.style.opacity=0; tip.setAttribute('aria-hidden','true');}
+
+/* Every hover detail must also reach keyboard and screen-reader users. */
+function hover(node,text){
+  node.addEventListener('mousemove',e=>showTip(e,text));
+  node.addEventListener('mouseleave',hideTip);
+  node.setAttribute('tabindex','0');
+  node.setAttribute('role','img');
+  node.setAttribute('aria-label',text.replace(/\n/g,'. '));
+  node.appendChild(txt('title',{},text));
+  node.addEventListener('focus',()=>{
+    const b=node.getBoundingClientRect?node.getBoundingClientRect():{left:0,top:0,width:0};
+    showTip({clientX:b.left+b.width/2,clientY:b.top},text);
+  });
+  node.addEventListener('blur',hideTip);
+}
+
+function niceTicks(lo,hi,n=5){
+  if(!isFinite(lo)||!isFinite(hi)) return [0,1];
+  if(lo===hi){lo-=1;hi+=1;}
+  const raw=(hi-lo)/n, mag=Math.pow(10,Math.floor(Math.log10(raw)));
+  const step=[1,2,2.5,5,10].map(m=>m*mag).find(s=>s>=raw)||10*mag;
+  const s=Math.floor(lo/step)*step, out=[];
+  for(let v=s;v<=hi+step*0.001;v+=step) out.push(+v.toFixed(10));
+  return out;
+}
+
+function empty(hostId,msg){
+  document.getElementById(hostId).innerHTML='<div class="empty">'+msg+'</div>';
+}
+
+function frame(hostId,h,pad,title,desc){
+  const host=document.getElementById(hostId);
+  host.innerHTML='';
+  const w = host.clientWidth || 640;
+  const svg = el('svg',{viewBox:'0 0 '+w+' '+h, height:h,
+    role:'img', 'aria-label':title});
+  svg.appendChild(txt('title',{},title));
+  if(desc) svg.appendChild(txt('desc',{},desc));
+  host.appendChild(svg);
+  return {svg,w,h,pad,host};
+}
+
+/* True time scale. A three-month step must be three times a one-month step,
+   otherwise every slope across the quarterly/monthly boundary is a lie. */
+function timeScale(g,dates){
+  const t=dates.map(d=>Date.parse(d));
+  const lo=Math.min.apply(null,t), hi=Math.max.apply(null,t);
+  const span=(hi-lo)||1;
+  return d=>g.pad.l+(Date.parse(d)-lo)/span*(g.w-g.pad.l-g.pad.r);
+}
+function linScale(g,lo,hi){
+  const span=(hi-lo)||1;
+  return v=>g.h-g.pad.b-(v-lo)/span*(g.h-g.pad.t-g.pad.b);
+}
+function yAxis(g,ticks,y,label,right){
+  ticks.forEach(t=>{
+    if(!right) g.svg.appendChild(el('line',
+      {x1:g.pad.l,x2:g.w-g.pad.r,y1:y(t),y2:y(t),class:'gl'}));
+    g.svg.appendChild(txt('text',{x:right?g.w-g.pad.r+6:g.pad.l-7,y:y(t)+3,
+      class:'ax','text-anchor':right?'start':'end'},label(t)));
+  });
+}
+/* Date-aware labels, anchored on the newest period and thinned backwards by
+   measured spacing.
+   The previous version thinned with a modulo and then force-drew the final
+   label regardless of where the modulo had already put one. With 15 periods in
+   a narrow card that placed labels at 0,3,6,9,12 and then 14 on top of 12, which
+   is exactly the overwritten axis reported on the concentration chart. Anchoring
+   on the last period also guarantees the label a reader actually wants - the
+   current release - is never the one dropped. */
+function timeLabels(g,periods,x,minGap){
+  if(!periods.length) return;
+  const gap=minGap||58;
+  const keep=[periods.length-1];
+  for(let i=periods.length-2;i>=0;i--){
+    const last=periods[keep[keep.length-1]];
+    if(Math.abs(x(periods[i].as_of)-x(last.as_of))>=gap) keep.push(i);
+  }
+  keep.forEach(i=>{
+    const p=periods[i];
+    g.svg.appendChild(txt('text',{x:x(p.as_of),y:g.h-g.pad.b+14,class:'ax',
+      'text-anchor':'middle'},p.period_label));
+  });
+}
+
+/* Point labels that cannot sit on top of one another.
+   Bank codes in the two scatter plots and the value labels on the ROE
+   waterfall collided precisely when two banks were close together - which is
+   the moment the reader most needs to tell them apart. Each label is placed in
+   turn and nudged vertically until it clears everything already placed, and it
+   carries a paper-coloured outline so it still reads where it crosses a bubble
+   or a gridline. Widths are estimated rather than measured because getBBox is
+   unavailable until the node is in the document and re-flowing per label would
+   cost more than it is worth here. */
+function labeller(){
+  const boxes=[];
+  return function place(g,o){
+    const px=o.size||10.5;
+    const w=String(o.text).length*px*0.58+3, h=px+2;
+    const anchor=o.anchor||'middle';
+    const x0=anchor==='end'?o.x-w:anchor==='start'?o.x:o.x-w/2;
+    let y=o.y;
+    const dirs=[0,-1,1,-2,2,-3,3,-4,4,-5,5];
+    for(let k=0;k<dirs.length;k++){
+      const cand=o.y+dirs[k]*(h+1);
+      /* Never nudge a label out of the top of the box. On screen it would
+         survive (overflow:visible) but land on the card's hint line, and in a
+         PNG it forces the export box to grow around one stray code. */
+      if(cand-h<Math.max(1,g.pad.t-16)||cand>g.h-g.pad.b+4) continue;
+      const clash=boxes.some(b=>!(x0+w<b.x||b.x+b.w<x0||
+                                  cand<b.y-b.h||b.y<cand-h));
+      if(!clash){y=cand;break;}
+    }
+    boxes.push({x:x0,y:y,w:w,h:h});
+    const a={x:o.x,y:y,'text-anchor':anchor,'font-size':px,
+      'paint-order':'stroke',stroke:o.halo||INK.paper,
+      'stroke-width':o.haloW==null?3:o.haloW,'stroke-linejoin':'round'};
+    for(const k in (o.attrs||{})) a[k]=o.attrs[k];
+    const t=txt('text',a,o.text);
+    g.svg.appendChild(t);
+    return t;
+  };
+}
+
+/* Wrap a category label to the width of its bar instead of breaking on every
+   space, which is what stacked three-word bank names into a column of single
+   words under the waterfall. */
+function wrapWords(text,maxChars){
+  const out=[]; let line='';
+  String(text).split(/\s+/).filter(Boolean).forEach(w=>{
+    if(!line) line=w;
+    else if((line+' '+w).length<=maxChars) line+=' '+w;
+    else {out.push(line); line=w;}
+  });
+  if(line) out.push(line);
+  return out;
+}
+/* Vertical marker wherever the reporting population changes. */
+function breakLines(g,x){
+  visibleBreaks().forEach(b=>{
+    const mid=new Date((Date.parse(b.as_of)+Date.parse(b.prev_as_of))/2)
+      .toISOString().slice(0,10);
+    const px=x(mid);
+    g.svg.appendChild(el('line',{x1:px,x2:px,y1:g.pad.t,y2:g.h-g.pad.b,
+      stroke:INK.brk,'stroke-width':1.2,'stroke-dasharray':'3 3',opacity:.7}));
+    const m=el('g');
+    m.appendChild(el('circle',{cx:px,cy:g.pad.t-5,r:5.5,fill:INK.brk,opacity:.95}));
+    m.appendChild(txt('text',{x:px,y:g.pad.t-2,'text-anchor':'middle',
+      'font-size':8,fill:'#ffffff','font-weight':'700'},'!'));
+    hover(m,'Reporting-population break\n'+b.prev_as_of+' \u2192 '+b.as_of+'\n'+
+      breakLabel(b)+'\n'+b.n_before+' \u2192 '+b.n_after+' banks\n'+
+      'Shares and concentration shift mechanically here.');
+    g.svg.appendChild(m);
+  });
+}
+
+/* ---------- system composition ---------- */
+/* Both stacks reconcile to total assets, so the residual is shown explicitly
+   rather than quietly dropped. Stacking also fixes the old problem where
+   equity (12% of assets) was crushed against a total-assets line. */
+/* Parts carry a palette INDEX, not a hex code, so the stack follows the active
+   theme instead of staying pinned to whichever one was current at load. */
+const STACKS = {
+  funding:{
+    title:'Funding mix',
+    hint:'EUR bn · deposits + other liabilities + equity, stacked; dashed line is published total assets',
+    parts:[['deposits','Deposits',0],
+           ['other_liabilities','Other liabilities',5],
+           ['equity_capital','Equity',4]],
+  },
+  asset:{
+    title:'Asset mix',
+    hint:'EUR bn · loans + securities + interbank + other assets, stacked; dashed line is published total assets',
+    parts:[['loans_net','Loans (net)',0],
+           ['investments_securities','Securities',2],
+           ['placement_with_banks','Interbank',1],
+           ['__other','Other assets',4]],
+  },
+};
+const partColor = p => PAL[p[2]];
+function stackValue(row,key,parts){
+  if(key!=='__other') return row[key];
+  const used=parts.filter(p=>p[0]!=='__other')
+    .reduce((s,p)=>s+(row[p[0]]||0),0);
+  return (row.total_assets||0)-used;
+}
+
+function drawSystem(){
+  const cfg=STACKS[S.sysMode], ps=periodsFiltered();
+  document.getElementById('sys-title').textContent=
+    'Banking system composition \u2014 '+cfg.title;
+  document.getElementById('sys-hint').textContent=cfg.hint;
+  const active=cfg.parts.filter(p=>!S.sysOff.has(p[0]));
+  legend('lg-sys',cfg.parts.map(p=>({key:p[0],name:p[1],col:partColor(p),
+    on:!S.sysOff.has(p[0])})),
+    k=>{S.sysOff.has(k)?S.sysOff.delete(k):S.sysOff.add(k); drawSystem();});
+
+  if(!ps.length||!active.length)
+    return empty('ch-sys','All components hidden — re-enable one in the legend.');
+
+  const g=frame('ch-sys',300,{l:52,r:16,t:18,b:28},
+    'Banking system '+cfg.title+' over time, stacked area in EUR billions',
+    'Each band is a balance-sheet component; the stack totals to system assets.');
+  const x=timeScale(g,ps.map(p=>p.as_of));
+  const tops=ps.map(p=>{const t=totalAt(p.as_of);
+    return active.reduce((s,pt)=>s+(stackValue(t,pt[0],cfg.parts)||0),0)/1e9;});
+  const assets=ps.map(p=>(totalAt(p.as_of).total_assets||0)/1e9);
+  const ticks=niceTicks(0,Math.max.apply(null,tops.concat(assets,[0.1])));
+  const y=linScale(g,ticks[0],ticks[ticks.length-1]);
+  yAxis(g,ticks,y,t=>nf(t,1));
+  timeLabels(g,ps,x);
+
+  const base=ps.map(()=>0);
+  active.forEach(function(part){
+    const key=part[0], col=partColor(part);
+    let d='';
+    ps.forEach((p,i)=>{
+      const v=(stackValue(totalAt(p.as_of),key,cfg.parts)||0)/1e9;
+      d += (i?'L':'M')+x(p.as_of)+' '+y(base[i]+v);
+      base[i]+=v;
+    });
+    for(let i=ps.length-1;i>=0;i--){
+      const v=(stackValue(totalAt(ps[i].as_of),key,cfg.parts)||0)/1e9;
+      d += 'L'+x(ps[i].as_of)+' '+y(base[i]-v);
+    }
+    g.svg.appendChild(el('path',{d:d+'Z',fill:col,opacity:.34,stroke:col,
+      'stroke-width':1.2}));
+  });
+
+  /* Published total assets as a reference line. Any gap to the stack is a
+     publisher inconsistency and should stay visible rather than be absorbed. */
+  let tl='';
+  ps.forEach(p=>{const t=totalAt(p.as_of).total_assets;
+    if(t!=null) tl+=(tl?'L':'M')+x(p.as_of)+' '+y(t/1e9);});
+  if(tl) g.svg.appendChild(el('path',{d:tl,fill:'none',stroke:INK.text,
+    'stroke-width':1.4,'stroke-dasharray':'5 3',opacity:.8}));
+
+  ps.forEach(p=>{
+    const t=totalAt(p.as_of);
+    const lines=cfg.parts.map(pt=>'  '+pt[1]+': '+
+      eurBn(stackValue(t,pt[0],cfg.parts))+
+      (S.sysOff.has(pt[0])?' (hidden)':'')).join('\n');
+    const hit=el('rect',{x:x(p.as_of)-9,y:g.pad.t,width:18,
+      height:g.h-g.pad.t-g.pad.b,fill:'transparent'});
+    hover(hit,p.period_label+'\nTotal assets: '+eurBn(t.total_assets)+'\n'+lines);
+    g.svg.appendChild(hit);
+  });
+  breakLines(g,x);
+}
+
+/* ---------- concentration ---------- */
+/* Fixed, threshold-anchored domain. A 49-point HHI wobble on a zoomed axis
+   reads as a trend; on the regulatory scale it correctly reads as flat. */
+const HHI_LO=1000, HHI_HI=2700;
+function drawHHI(){
+  const ps=periodsFiltered();
+  const rows=ps.map(p=>({p:p,c:CONC.find(c=>c.as_of===p.as_of&&
+    c.metric==='total_assets')})).filter(r=>r.c);
+  legend('lg-hhi',[{key:'hhi',name:'HHI',col:PAL[0],on:true},
+    {key:'cr3',name:'CR3',col:PAL[1],on:true},
+    {key:'cr5',name:'CR5',col:PAL[2],on:true}],null);
+  if(!rows.length) return empty('ch-hhi','No concentration data for this range.');
+
+  const g=frame('ch-hhi',300,{l:46,r:42,t:18,b:28},
+    'Asset concentration over time: HHI against regulatory thresholds, with CR3 and CR5',
+    'HHI below 1500 is unconcentrated, 1500 to 2500 moderately concentrated, above 2500 highly concentrated.');
+  const x=timeScale(g,rows.map(r=>r.p.as_of));
+  const y=linScale(g,HHI_LO,HHI_HI);
+  const y2=linScale(g,40,100);
+
+  [[HHI_LO,1500,INK.good,'Unconcentrated'],
+   [1500,2500,INK.warn,'Moderately concentrated'],
+   [2500,HHI_HI,INK.bad,'Highly concentrated']].forEach(function(band){
+    const a=band[0], b=band[1], col=band[2], lab=band[3];
+    g.svg.appendChild(el('rect',{x:g.pad.l,y:y(b),width:g.w-g.pad.l-g.pad.r,
+      height:Math.max(0,y(a)-y(b)),fill:col,opacity:.07}));
+    /* Anchored to the right edge and centred in its own band. The caption used
+       to sit 11px below the band's upper boundary, which dropped
+       "Unconcentrated" straight onto the HHI line at roughly 1,440 - the
+       collision reported on this card. */
+    g.svg.appendChild(txt('text',{x:g.w-g.pad.r-6,y:y((a+b)/2)+3,'font-size':9,
+      fill:col,opacity:.95,'text-anchor':'end','paint-order':'stroke',
+      stroke:INK.paper,'stroke-width':3,'stroke-linejoin':'round'},lab));
+  });
+  [1500,2500].forEach(v=>g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,
+    y1:y(v),y2:y(v),stroke:INK.rule,'stroke-dasharray':'2 4'})));
+
+  yAxis(g,[1000,1500,2000,2500],y,t=>int(t));
+  [50,70,90].forEach(v=>g.svg.appendChild(
+    txt('text',{x:g.w-g.pad.r+6,y:y2(v)+3,class:'ax'},v+'%')));
+  timeLabels(g,rows.map(r=>r.p),x);
+
+  let d=''; rows.forEach(r=>d+=(d?'L':'M')+x(r.p.as_of)+' '+y(r.c.hhi));
+  g.svg.appendChild(el('path',{d:d,fill:'none',stroke:PAL[0],'stroke-width':2.2}));
+  [['cr3',PAL[1]],['cr5',PAL[2]]].forEach(function(s){
+    let p2=''; rows.forEach(r=>p2+=(p2?'L':'M')+x(r.p.as_of)+' '+y2(r.c[s[0]]));
+    g.svg.appendChild(el('path',{d:p2,fill:'none',stroke:s[1],'stroke-width':1.6,
+      'stroke-dasharray':'4 3'}));});
+  rows.forEach(r=>{
+    const c=el('circle',{cx:x(r.p.as_of),cy:y(r.c.hhi),r:3.4,fill:PAL[0]});
+    hover(c,r.p.period_label+'\nHHI '+int(r.c.hhi)+' \u2014 unconcentrated\n'+
+      'CR3 '+pct(r.c.cr3)+' \u00b7 CR5 '+pct(r.c.cr5)+'\n'+
+      r.c.n_banks+' reporting banks');
+    g.svg.appendChild(c);});
+  breakLines(g,x);
+}
+
+/* ---------- funding dynamics ---------- */
+/* Loans compounding faster than deposits is the decision-relevant story in
+   this dataset. Indexing both to the window start makes the wedge explicit
+   and works at every period, unlike YoY which is sparse for monthly data. */
+function drawFunding(){
+  const ps=periodsFiltered();
+  const pts=ps.map(p=>({p:p,t:totalAt(p.as_of)}))
+    .filter(r=>r.t.loans_net!=null&&r.t.deposits!=null);
+  legend('lg-fund',[
+    {key:'l',name:'Loans (net), indexed',col:PAL[0],on:true},
+    {key:'d',name:'Deposits, indexed',col:PAL[1],on:true},
+    {key:'g',name:'Growth gap',col:PAL[3],on:true},
+    {key:'r',name:'Loan / deposit ratio (right axis)',col:PAL[2],on:true}],null);
+  if(pts.length<2) return empty('ch-fund',
+    'Need at least two periods — widen the frequency filter.');
+
+  const first=pts[0], last=pts[pts.length-1];
+  if(!first.t.loans_net||!first.t.deposits)
+    return empty('ch-fund','Base period has no loan or deposit figure.');
+  document.getElementById('fund-hint').textContent=
+    'Indexed to '+first.p.period_label+' = 100 \u00b7 loan/deposit ratio '+
+    pct(first.t.loan_to_deposit)+' \u2192 '+pct(last.t.loan_to_deposit);
+
+  const g=frame('ch-fund',300,{l:44,r:48,t:18,b:28},
+    'Indexed growth of loans versus deposits with the loan-to-deposit ratio',
+    'The shaded wedge is the cumulative growth gap that drives the funding ratio.');
+  const x=timeScale(g,pts.map(r=>r.p.as_of));
+  const iL=r=>r.t.loans_net/first.t.loans_net*100;
+  const iD=r=>r.t.deposits/first.t.deposits*100;
+  const all=[]; pts.forEach(r=>{all.push(iL(r));all.push(iD(r));});
+  const ticks=niceTicks(Math.min.apply(null,all)-2,Math.max.apply(null,all)+2,4);
+  const y=linScale(g,ticks[0],ticks[ticks.length-1]);
+  const ld=pts.map(r=>r.t.loan_to_deposit).filter(v=>v!=null);
+  const t2=niceTicks(Math.min.apply(null,ld)-2,Math.max.apply(null,ld)+2,4);
+  const y2=linScale(g,t2[0],t2[t2.length-1]);
+  yAxis(g,ticks,y,t=>nf(t,0));
+  yAxis(g,t2,y2,t=>nf(t,0)+'%',true);
+  timeLabels(g,pts.map(r=>r.p),x);
+
+  let wedge='';
+  pts.forEach((r,i)=>wedge+=(i?'L':'M')+x(r.p.as_of)+' '+y(iL(r)));
+  for(let i=pts.length-1;i>=0;i--) wedge+='L'+x(pts[i].p.as_of)+' '+y(iD(pts[i]));
+  g.svg.appendChild(el('path',{d:wedge+'Z',fill:PAL[3],opacity:.14}));
+
+  [[iL,PAL[0]],[iD,PAL[1]]].forEach(function(s){
+    let d=''; pts.forEach((r,i)=>d+=(i?'L':'M')+x(r.p.as_of)+' '+y(s[0](r)));
+    g.svg.appendChild(el('path',{d:d,fill:'none',stroke:s[1],'stroke-width':2.1}));
+  });
+  let dr='';
+  pts.forEach(r=>{if(r.t.loan_to_deposit==null)return;
+    dr+=(dr?'L':'M')+x(r.p.as_of)+' '+y2(r.t.loan_to_deposit);});
+  if(dr) g.svg.appendChild(el('path',{d:dr,fill:'none',stroke:PAL[2],
+    'stroke-width':1.7,'stroke-dasharray':'5 3'}));
+
+  pts.forEach(r=>{
+    const hit=el('rect',{x:x(r.p.as_of)-9,y:g.pad.t,width:18,
+      height:g.h-g.pad.t-g.pad.b,fill:'transparent'});
+    hover(hit,r.p.period_label+'\n'+
+      'Loans '+eurBn(r.t.loans_net)+' \u00b7 index '+nf(iL(r),1)+'\n'+
+      'Deposits '+eurBn(r.t.deposits)+' \u00b7 index '+nf(iD(r),1)+'\n'+
+      'Cumulative growth gap '+nf(iL(r)-iD(r),1)+' pts\n'+
+      'Loan/deposit '+pct(r.t.loan_to_deposit));
+    g.svg.appendChild(hit);
+  });
+  breakLines(g,x);
+}
+
+/* ---------- bank ranking ---------- */
+function drawRank(){
+  const m=RANK_METRICS.find(m=>m[0]===S.metric);
+  const key=m[0], label=m[1], kind=m[2];
+  document.getElementById('rank-title').textContent='Bank ranking \u2014 '+label;
+  const p=PERIODS.find(p=>p.as_of===S.period);
+  document.getElementById('rank-hint').textContent=p?p.period_label:'';
+  const rows=banksAt(S.period).filter(r=>r[key]!=null).sort((a,b)=>b[key]-a[key]);
+  if(!rows.length) return empty('ch-rank',
+    'No '+label+' reported for this period.');
+
+  const g=frame('ch-rank',Math.max(210,rows.length*26+34),{l:150,r:82,t:10,b:22},
+    'Bank ranking by '+label+' for '+(p?p.period_label:''),
+    'Horizontal bars ordered largest to smallest.');
+  const vals=rows.map(r=>r[key]);
+  const max=Math.max.apply(null,vals.concat([0]));
+  const min=Math.min.apply(null,vals.concat([0]));
+  const span=(max-min)||1;
+  const x0=g.pad.l+(0-min)/span*(g.w-g.pad.l-g.pad.r);
+  const bw=(g.h-g.pad.t-g.pad.b)/rows.length;
+  rows.forEach((r,i)=>{
+    const v=r[key], xv=g.pad.l+(v-min)/span*(g.w-g.pad.l-g.pad.r);
+    const yy=g.pad.t+i*bw+2;
+    const rect=el('rect',{x:Math.min(x0,xv),y:yy,
+      width:Math.max(1,Math.abs(xv-x0)),height:Math.max(2,bw-6),rx:3,
+      fill:colorOf[r.bank_code]||PAL[0],opacity:.85});
+    hover(rect,r.bank_name+'  (asset rank '+
+      (r.rank_assets==null?'\u2013':r.rank_assets)+
+      (r.rank_disputed?', KBA printed '+r.rank:'')+')\n'+
+      label+': '+fmt(v,kind)+'\n'+
+      'Share of system assets: '+pct(r.market_share_assets));
+    g.svg.appendChild(rect);
+    g.svg.appendChild(txt('text',{x:g.pad.l-8,y:yy+bw/2,class:'ax',
+      'text-anchor':'end'},r.bank_name));
+    g.svg.appendChild(txt('text',{x:Math.max(x0,xv)+6,y:yy+bw/2,class:'axb'},
+      fmt(v,kind)));
+  });
+  if(min<0) g.svg.appendChild(el('line',{x1:x0,x2:x0,y1:g.pad.t,y2:g.h-g.pad.b,
+    stroke:INK.rule}));
+}
+
+/* ---------- market share ---------- */
+function drawShare(){
+  const ps=periodsFiltered();
+  const codes=BANKS.map(b=>b.bank_code).filter(c=>!S.shareOff.has(c));
+  legend('lg-share',BANKS.map(b=>({key:b.bank_code,name:b.bank_name,
+    col:colorOf[b.bank_code],on:!S.shareOff.has(b.bank_code)})),
+    k=>{S.shareOff.has(k)?S.shareOff.delete(k):S.shareOff.add(k); drawShare();});
+  if(!codes.length||!ps.length)
+    return empty('ch-share','All banks hidden — re-enable one in the legend.');
+
+  const vals=[];
+  codes.forEach(c=>ps.forEach(p=>{const r=rowsAt(p.as_of).find(r=>r.bank_code===c);
+    if(r&&r.market_share_assets!=null) vals.push(r.market_share_assets);}));
+  if(!vals.length) return empty('ch-share','No market-share data for this range.');
+
+  const g=frame('ch-share',300,{l:38,r:46,t:18,b:28},
+    'Market share of total assets by bank over time',
+    'One line per bank, percent of system assets.');
+  const x=timeScale(g,ps.map(p=>p.as_of));
+  /* On a linear axis the three smallest banks sit under 2% and collapse onto
+     the baseline, which is exactly where the credit interest is. A log axis
+     gives equal vertical space to equal proportional change, so a tail bank
+     growing 13% reads as clearly as a leader growing 6%. */
+  const lo=Math.min.apply(null,vals), hiv=Math.max.apply(null,vals);
+  let y,ticks;
+  if(S.shareLog&&lo>0){
+    const base=[.5,1,2,5,10,20,50];
+    ticks=base.filter(t=>t>=lo/1.6&&t<=hiv*1.6);
+    if(ticks.length<2) ticks=[lo,hiv];
+    const lin=linScale(g,Math.log10(ticks[0]),
+                         Math.log10(ticks[ticks.length-1]));
+    y=v=>lin(Math.log10(Math.max(v,1e-3)));
+    yAxis(g,ticks.map(t=>Math.log10(t)),lin,
+      t=>{const v=Math.pow(10,t); return (v<1?nf(v,1):nf(v,0))+'%';});
+  }else{
+    ticks=niceTicks(0,hiv);
+    y=linScale(g,ticks[0],ticks[ticks.length-1]);
+    yAxis(g,ticks,y,t=>nf(t,0)+'%');
+  }
+  document.getElementById('share-hint').textContent =
+    '% of system \u00b7 '+(S.shareLog?'log scale, so equal vertical distance is '+
+    'equal proportional change':'linear scale')+
+    ' \u00b7 click a legend item to hide a bank \u00b7 hover to isolate';
+  timeLabels(g,ps,x);
+
+  const paths=[], ends=[];
+  codes.forEach(code=>{
+    const col=colorOf[code]; let d=''; let last=null;
+    ps.forEach(p=>{const r=rowsAt(p.as_of).find(r=>r.bank_code===code);
+      if(!r||r.market_share_assets==null) return;
+      d+=(d?'L':'M')+x(p.as_of)+' '+y(r.market_share_assets);
+      last={p:p,v:r.market_share_assets};});
+    if(!d) return;
+    const bank=BANKS.find(b=>b.bank_code===code)||{};
+    const path=el('path',{d:d,fill:'none',stroke:col,'stroke-width':1.9,
+      'stroke-linejoin':'round'});
+    paths.push(path);
+    /* Dim every other line on hover so eleven series stop being spaghetti. */
+    path.addEventListener('mouseenter',()=>paths.forEach(o=>
+      o.setAttribute('opacity',o===path?1:.1)));
+    path.addEventListener('mouseleave',()=>paths.forEach(o=>
+      o.setAttribute('opacity',1)));
+    hover(path,(bank.bank_name||code)+'\nShare of system assets'+
+      (last?'\n'+last.p.period_label+': '+pct(last.v):''));
+    g.svg.appendChild(path);
+    /* Direct end labels beat an eleven-item colour lookup. */
+    if(last) ends.push({x:x(last.p.as_of)+5,y:y(last.v)+3,code:code,col:col,
+      v:last.v});
+  });
+  /* On the linear axis the three smallest banks sit under 2% and their end
+     labels stack on the baseline, which is where the tail is least readable
+     and most interesting. Place them against each other, largest first. */
+  const L=labeller();
+  ends.sort((a,b)=>b.v-a.v).forEach(e=>L(g,{x:e.x,y:e.y,text:e.code,size:9.5,
+    anchor:'start',attrs:{fill:e.col,'font-weight':700}}));
+  breakLines(g,x);
+}
+
+/* ---------- ROE decomposition ---------- */
+/* ROA and ROE correlate at ~0.97, so an ROA-vs-ROE scatter is a straight line
+   carrying almost no information. Plotting ROE against capital intensity
+   separates "earns well" from "runs thin capital", with constant-ROA
+   iso-lines (ROE = ROA / equity-ratio) as the reference grid. */
+function drawDuPont(){
+  const p=PERIODS.find(p=>p.as_of===S.period);
+  document.getElementById('dupont-title').textContent=
+    'ROE decomposition \u2014 '+(p?p.period_label:'');
+  const rows=banksAt(S.period).filter(r=>r.roe!=null&&r.equity_ratio!=null);
+  if(!rows.length) return empty('ch-dupont',
+    'No profitability data reported for this period.');
+
+  const g=frame('ch-dupont',300,{l:46,r:22,t:18,b:38},
+    'ROE against equity-to-assets by bank, with constant-ROA reference curves',
+    'Banks high and to the left earn their ROE through leverage; high and to the right earn it through returns.');
+  const xs=rows.map(r=>r.equity_ratio), ys=rows.map(r=>r.roe);
+  const xt=niceTicks(Math.min.apply(null,xs)-1,Math.max.apply(null,xs)+1,4);
+  const yt=niceTicks(Math.min.apply(null,ys.concat([0]))-2,
+                     Math.max.apply(null,ys)+3,4);
+  const X=v=>g.pad.l+(v-xt[0])/(xt[xt.length-1]-xt[0])*(g.w-g.pad.l-g.pad.r);
+  const Y=linScale(g,yt[0],yt[yt.length-1]);
+  yAxis(g,yt,Y,t=>nf(t,0)+'%');
+  xt.forEach(t=>{
+    g.svg.appendChild(el('line',{x1:X(t),x2:X(t),y1:g.pad.t,y2:g.h-g.pad.b,
+      class:'gl'}));
+    g.svg.appendChild(txt('text',{x:X(t),y:g.h-g.pad.b+14,class:'ax',
+      'text-anchor':'middle'},nf(t,0)+'%'));});
+  g.svg.appendChild(txt('text',{x:(g.pad.l+g.w-g.pad.r)/2,y:g.h-g.pad.b+30,
+    class:'ax','text-anchor':'middle'},
+    'Equity / assets  \u2014  lower means more leveraged'));
+
+  const yLo=yt[0], yHi=yt[yt.length-1];
+  [1,2,3,4].forEach(roa=>{
+    let d='', started=false;
+    for(let e=xt[0];e<=xt[xt.length-1];e+=0.1){
+      const v=roa*100/e;
+      if(v<yLo||v>yHi){started=false;continue;}
+      d+=(started?'L':'M')+X(e)+' '+Y(v); started=true;
+    }
+    if(!d) return;
+    g.svg.appendChild(el('path',{d:d,fill:'none',stroke:INK.iso,
+      'stroke-width':1,'stroke-dasharray':'3 4'}));
+    const eLab=xt[0]+0.5, vLab=roa*100/eLab;
+    if(vLab>=yLo&&vLab<=yHi)
+      g.svg.appendChild(txt('text',{x:X(eLab)+2,y:Y(vLab)-3,'font-size':9,
+        fill:INK.isoTx},'ROA '+roa+'%'));
+  });
+
+  if(Y(0)>g.pad.t&&Y(0)<g.h-g.pad.b)
+    g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,y1:Y(0),y2:Y(0),
+      stroke:INK.rule,'stroke-width':1}));
+
+  const maxA=Math.max.apply(null,rows.map(r=>r.total_assets||0).concat([1]));
+  const plotted=rows.slice().sort((a,b)=>(b.total_assets||0)-(a.total_assets||0));
+  const marks=[];
+  plotted.forEach(r=>{
+    const rad=6+17*Math.sqrt((r.total_assets||0)/maxA);
+    const c=el('circle',{cx:X(r.equity_ratio),cy:Y(r.roe),r:rad,
+      fill:colorOf[r.bank_code],opacity:.26,stroke:colorOf[r.bank_code],
+      'stroke-width':1.5});
+    hover(c,r.bank_name+'\nROE '+pct(r.roe)+' \u00b7 ROA '+pct(r.roa)+'\n'+
+      'Equity/assets '+pct(r.equity_ratio)+' \u00b7 leverage '+
+      nf(r.leverage,1)+'\u00d7\n'+
+      'Assets '+eurBn(r.total_assets)+'\n'+
+      'ROA and ROE as published by KBA (six-period average denominator).');
+    g.svg.appendChild(c);
+    marks.push({r:r,rad:rad});
+  });
+  /* Same collision-avoiding pass as the efficiency plot. Ten banks inside a
+     four-point ROE band put several codes on the same pixel row otherwise. */
+  const L=labeller();
+  marks.forEach(m=>L(g,{x:X(m.r.equity_ratio),y:Y(m.r.roe)-m.rad-4,
+    text:m.r.bank_code,size:10.5,
+    attrs:{fill:colorOf[m.r.bank_code],'font-weight':700}}));
+}
+
+/* ---------- head to head on core KPIs ---------- */
+/* One strip per measure. Absolute values alone do not tell a bank where it
+   stands, and a rank alone hides how far apart the pack is, so each strip
+   carries both: the peer range and quartile band give the distribution, the
+   markers give the two banks being compared. */
+function peerA(){ return S.bank && S.bank!=='TOTAL' ? S.bank : null; }
+function drawPeer(){
+  const a=peerA(), b=S.bank2&&S.bank2!==a ? S.bank2 : null;
+  const p=PERIODS.find(p=>p.as_of===S.period);
+  const nameA=a?(BANKS.find(x=>x.bank_code===a)||{}).bank_name:null;
+  const nameB=b?(BANKS.find(x=>x.bank_code===b)||{}).bank_name:null;
+  document.getElementById('peer-title').textContent = a
+    ? 'Head to head \u2014 '+nameA+(nameB?' vs '+nameB:' vs the sector')
+    : 'Head to head on core KPIs';
+  document.getElementById('peer-sub').textContent =
+    (p?p.period_label:'')+(a?'':' \u00b7 pick a bank in Bank A');
+  if(!a) return empty('ch-peer',
+    'Choose a bank in \u201cBank A\u201d to benchmark it against the sector. '+
+    'Add a second in \u201cBank B\u201d for a direct comparison.');
+
+  const rowA=bankRow(S.period,a), rowB=b?bankRow(S.period,b):null;
+  /* Scope the distribution to Bank A's own size tier when asked. Comparing a
+     tail bank against a sector median that five banks 15x its size help set is
+     not a like-for-like read. */
+  const tier=S.peerTier&&rowA ? rowA.size_tier : null;
+  const gm=growthMetric(S.period);
+  const items=PEER_KPIS.map(function(k){
+    const key = k[0]==='__growth__' ? (gm?gm.key:null) : k[0];
+    if(!key) return null;
+    const label = k[0]==='__growth__' ? gm.label : k[1];
+    return {key:key,label:label,kind:k[2],hi:k[3],
+            sp:spread(S.period,key,tier)};
+  }).filter(it=>it&&it.sp&&rowA&&rowA[it.key]!=null);
+  if(!items.length) return empty('ch-peer','No comparable measures reported.');
+  document.getElementById('peer-sub').textContent =
+    (p?p.period_label:'')+(tier
+      ? ' \u00b7 compared against '+tier.toLowerCase()+' banks only ('+
+        items[0].sp.n+' in tier)'
+      : ' \u00b7 compared against all '+items[0].sp.n+' banks')+
+    (gm?' \u00b7 growth '+gm.basis:'');
+
+  const rowH=27, padT=22;
+  const g=frame('ch-peer',items.length*rowH+padT+16,{l:186,r:196,t:padT,b:8},
+    'Head-to-head comparison of '+nameA+(nameB?' and '+nameB:'')+
+    ' against the peer distribution on core measures',
+    'Each row shows the peer range, the interquartile band, the sector median, and the selected banks.');
+  const x0=g.pad.l, x1=g.w-g.pad.r;
+  g.svg.appendChild(txt('text',{x:x0,y:13,class:'ax'},'worst'));
+  g.svg.appendChild(txt('text',{x:x1,y:13,class:'ax','text-anchor':'end'},'best'));
+  g.svg.appendChild(txt('text',{x:x1+8,y:13,class:'ax'},nameA?nameA.slice(0,14):''));
+  if(nameB) g.svg.appendChild(txt('text',{x:x1+104,y:13,class:'ax'},
+    nameB.slice(0,14)));
+
+  items.forEach((it,i)=>{
+    const y=g.pad.t+i*rowH+rowH/2;
+    const sp=it.sp;
+    // Orient the axis so "further right" always means "better" where that is
+    // meaningful; neutral measures keep their natural low-to-high direction.
+    const flip = it.hi===0;
+    const lo=sp.min, hi=sp.max, span=(hi-lo)||1;
+    const X=v=>{const t=(v-lo)/span; return x0+(flip?1-t:t)*(x1-x0);};
+
+    g.svg.appendChild(txt('text',{x:x0-10,y:y+4,class:'ax','text-anchor':'end'},
+      it.label));
+    g.svg.appendChild(el('line',{x1:x0,x2:x1,y1:y,y2:y,stroke:INK.range,
+      'stroke-width':2,'stroke-linecap':'round'}));
+    g.svg.appendChild(el('rect',{x:Math.min(X(sp.q1),X(sp.q3)),y:y-6,
+      width:Math.abs(X(sp.q3)-X(sp.q1)),height:12,rx:3,fill:INK.iqr,
+      opacity:.6}));
+    g.svg.appendChild(el('line',{x1:X(sp.med),x2:X(sp.med),y1:y-9,y2:y+9,
+      stroke:INK.text,'stroke-width':1.6}));
+
+    [[rowA,a,nameA,0],[rowB,b,nameB,1]].forEach(function(t){
+      const row=t[0], code=t[1], nm=t[2], slot=t[3];
+      if(!row||code==null) return;
+      const v=row[it.key];
+      if(v==null||isNaN(v)) {
+        g.svg.appendChild(txt('text',{x:x1+8+slot*96,y:y+4,class:'ax'},'\u2013'));
+        return;
+      }
+      const better = it.hi==null ? null
+        : (it.hi ? v>sp.med : v<sp.med);
+      const col=colorOf[code]||PAL[0];
+      const mk=el('circle',{cx:X(v),cy:y,r:6,
+        fill:better===false?'none':col,
+        stroke:col,'stroke-width':2});
+      hover(mk,nm+' \u2014 '+it.label+'\n'+fmt(v,it.kind)+
+        '\nSector median '+fmt(sp.med,it.kind)+
+        '\nPeer range '+fmt(sp.min,it.kind)+' to '+fmt(sp.max,it.kind)+
+        (better==null?'\nNeither direction is inherently better.'
+                     :(better?'\nBetter than the median.'
+                             :'\nWorse than the median.')));
+      g.svg.appendChild(mk);
+      g.svg.appendChild(txt('text',{x:x1+8+slot*96,y:y+4,
+        'font-size':11,fill:col,'font-variant-numeric':'tabular-nums'},
+        fmt(v,it.kind)));
+    });
+  });
+}
+
+/* ---------- efficiency versus return ---------- */
+/* The releases carry no operating-expense line, so a true cost-to-income ratio
+   cannot be built. Income minus profit does give the entire burden between
+   revenue and bottom line - operating costs, impairment and tax - which is a
+   hard upper bound on cost-to-income and separates the field cleanly. */
+function drawEff(){
+  const p=PERIODS.find(p=>p.as_of===S.period);
+  document.getElementById('eff-title').textContent=
+    'Efficiency versus return \u2014 '+(p?p.period_label:'');
+  const rows=banksAt(S.period).filter(r=>r.expense_burden!=null&&r.roe!=null);
+  if(rows.length<3) return empty('ch-eff','Not enough banks report both measures.');
+  const spB=spread(S.period,'expense_burden'), spR=spread(S.period,'roe');
+  document.getElementById('eff-hint').textContent=
+    'Cost & provision burden = (income \u2212 profit) / income. This is an upper '+
+    'bound on cost-to-income, which KBA does not publish. Median burden '+
+    pct(spB.med)+', median ROE '+pct(spR.med)+'.';
+
+  const g=frame('ch-eff',312,{l:46,r:20,t:16,b:40},
+    'Cost and provision burden against ROE by bank for '+(p?p.period_label:''),
+    'Banks to the left run leaner; banks higher up earn more on equity.');
+  const xs=rows.map(r=>r.expense_burden), ys=rows.map(r=>r.roe);
+  const xt=niceTicks(Math.min.apply(null,xs)-4,Math.max.apply(null,xs)+4,4);
+  const yt=niceTicks(Math.min.apply(null,ys.concat([0]))-2,
+                     Math.max.apply(null,ys)+3,4);
+  const X=v=>g.pad.l+(v-xt[0])/(xt[xt.length-1]-xt[0])*(g.w-g.pad.l-g.pad.r);
+  const Y=linScale(g,yt[0],yt[yt.length-1]);
+  yAxis(g,yt,Y,t=>nf(t,0)+'%');
+  xt.forEach(t=>{
+    g.svg.appendChild(el('line',{x1:X(t),x2:X(t),y1:g.pad.t,y2:g.h-g.pad.b,
+      class:'gl'}));
+    g.svg.appendChild(txt('text',{x:X(t),y:g.h-g.pad.b+14,class:'ax',
+      'text-anchor':'middle'},nf(t,0)+'%'));});
+  g.svg.appendChild(txt('text',{x:(g.pad.l+g.w-g.pad.r)/2,y:g.h-g.pad.b+31,
+    class:'ax','text-anchor':'middle'},
+    'Cost & provision burden  \u2014  lower is leaner'));
+
+  // Median crosshairs turn the plot into a readable four-box.
+  g.svg.appendChild(el('line',{x1:X(spB.med),x2:X(spB.med),y1:g.pad.t,
+    y2:g.h-g.pad.b,stroke:INK.rule,'stroke-dasharray':'3 4'}));
+  g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,y1:Y(spR.med),
+    y2:Y(spR.med),stroke:INK.rule,'stroke-dasharray':'3 4'}));
+  g.svg.appendChild(txt('text',{x:g.pad.l+5,y:g.pad.t+12,'font-size':9,
+    fill:INK.good,'font-weight':600},'lean \u00b7 high return'));
+  g.svg.appendChild(txt('text',{x:g.w-g.pad.r-5,y:g.h-g.pad.b-6,'font-size':9,
+    fill:INK.bad,'font-weight':600,'text-anchor':'end'},'costly \u00b7 low return'));
+  if(Y(0)>g.pad.t&&Y(0)<g.h-g.pad.b)
+    g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,y1:Y(0),y2:Y(0),
+      stroke:INK.neutral,'stroke-width':1,opacity:.6}));
+
+  /* Bubbles first, then every label in one collision-avoiding pass, so a bank
+     code is never painted over by the bubble of the bank plotted after it.
+     Labels are drawn in the bank's own series colour with a paper outline,
+     which is what makes two banks sitting on top of each other separable. */
+  const maxA=Math.max.apply(null,rows.map(r=>r.total_assets||0).concat([1]));
+  const sel=new Set([peerA(),S.bank2].filter(Boolean));
+  const plotted=rows.slice().sort((a,b)=>(b.total_assets||0)-(a.total_assets||0));
+  const marks=[];
+  plotted.forEach(r=>{
+    const rad=5+15*Math.sqrt((r.total_assets||0)/maxA);
+    const on=sel.has(r.bank_code);
+    const c=el('circle',{cx:X(r.expense_burden),cy:Y(r.roe),r:rad,
+      fill:colorOf[r.bank_code],opacity:sel.size?(on?.42:.12):.28,
+      stroke:colorOf[r.bank_code],'stroke-width':on?2.4:1.4});
+    hover(c,r.bank_name+'\nBurden '+pct(r.expense_burden)+
+      ' \u00b7 ROE '+pct(r.roe)+'\nNet margin '+pct(r.net_margin)+
+      ' \u00b7 income yield '+pct(r.income_yield)+
+      '\nAssets '+eurBn(r.total_assets)+
+      '\nBurden covers operating costs, impairment and tax.');
+    g.svg.appendChild(c);
+    marks.push({r:r,rad:rad,on:on});
+  });
+  const L=labeller();
+  /* Selected banks are placed first so they win the uncontested position. */
+  marks.slice().sort((a,b)=>(b.on?1:0)-(a.on?1:0)).forEach(m=>{
+    L(g,{x:X(m.r.expense_burden),y:Y(m.r.roe)-m.rad-4,text:m.r.bank_code,
+      size:10.5,attrs:{fill:colorOf[m.r.bank_code],'font-weight':700,
+      opacity:sel.size?(m.on?1:.5):1}});
+  });
+}
+
+/* ---------- ROE bridge ---------- */
+/* ROE = net margin x income yield x leverage, and that identity reconciles to
+   the published ROE within about half a point. Substituting one factor at a
+   time against the median bank shows which of the three actually explains a
+   bank's gap, which a single ROE number never can. */
+function factors(row){
+  if(!row||row.net_margin==null||row.income_yield==null||row.leverage==null)
+    return null;
+  return {m:row.net_margin/100, y:row.income_yield/100, l:row.leverage};
+}
+function drawBridge(){
+  const a=peerA();
+  const p=PERIODS.find(p=>p.as_of===S.period);
+  const nameA=a?(BANKS.find(x=>x.bank_code===a)||{}).bank_name:null;
+  document.getElementById('bridge-title').textContent = a
+    ? 'Why the ROE gap \u2014 '+nameA+' vs the median bank'
+    : 'Why the ROE gap';
+  if(!a) return empty('ch-bridge','Choose a bank in \u201cBank A\u201d.');
+  const f=factors(bankRow(S.period,a));
+  const med={m:(spread(S.period,'net_margin')||{}).med/100,
+             y:(spread(S.period,'income_yield')||{}).med/100,
+             l:(spread(S.period,'leverage')||{}).med};
+  if(!f||[med.m,med.y,med.l].some(v=>v==null||isNaN(v)))
+    return empty('ch-bridge','Profitability components are not reported here.');
+
+  const base=med.m*med.y*med.l*100;
+  const s1=f.m*med.y*med.l*100;
+  const s2=f.m*f.y*med.l*100;
+  const s3=f.m*f.y*f.l*100;
+  const rowA=bankRow(S.period,a);
+  const pub=rowA&&rowA.roe!=null?rowA.roe:null;
+  const steps=[
+    {lab:'Median bank',val:base,type:'base',
+     det:'Margin '+pct(med.m*100)+' \u00b7 yield '+pct(med.y*100)+
+         ' \u00b7 leverage '+nf(med.l,2)+'\u00d7'},
+    {lab:'Net margin',val:s1-base,type:'d',
+     det:pct(med.m*100)+' \u2192 '+pct(f.m*100)},
+    {lab:'Income yield',val:s2-s1,type:'d',
+     det:pct(med.y*100)+' \u2192 '+pct(f.y*100)},
+    {lab:'Leverage',val:s3-s2,type:'d',
+     det:nf(med.l,2)+'\u00d7 \u2192 '+nf(f.l,2)+'\u00d7'},
+  ];
+  /* The identity runs on year-to-date income annualised over point-in-time
+     equity. KBA publishes ROE on a six-period average equity denominator, which
+     cannot be reconstructed from these releases. The difference is small in the
+     normal case, so it is shown as its own bar rather than hidden and the
+     bridge lands exactly on the published number. */
+  if(pub!=null) steps.push({lab:'Reporting basis',val:pub-s3,type:'d',
+    det:'KBA averages equity over six periods; this identity uses '+
+        'point-in-time equity and annualised year-to-date income.'});
+  steps.push({lab:nameA,val:pub!=null?pub:s3,type:'base',
+    det:pub!=null?'As published by KBA':'Identity basis'});
+
+  const g=frame('ch-bridge',330,{l:46,r:16,t:26,b:52},
+    'Waterfall decomposing the ROE gap between '+nameA+' and the median bank',
+    'Each middle bar is the ROE effect of moving one factor from the median to this bank.');
+  let run=0; const tops=[];
+  steps.forEach(s=>{
+    if(s.type==='base'){ tops.push(s.val,0); run=s.val; }
+    else { tops.push(run,run+s.val); run+=s.val; }
+  });
+  const yt=niceTicks(Math.min.apply(null,tops.concat([0])),
+                     Math.max.apply(null,tops),4);
+  const Y=linScale(g,yt[0],yt[yt.length-1]);
+  yAxis(g,yt,Y,t=>nf(t,0)+'%');
+  const bw=(g.w-g.pad.l-g.pad.r)/steps.length;
+  g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,y1:Y(0),y2:Y(0),
+    stroke:INK.rule}));
+
+  /* Wrap category labels to the bar width. Splitting on every space stacked
+     "Raiffeisen Bank Kosovo" into three single-word lines that ran past the
+     bottom of the frame and into the neighbouring bar's caption. */
+  const maxChars=Math.max(6,Math.floor(bw*0.94/5.6));
+  const L=labeller();
+  run=0;
+  steps.forEach((s,i)=>{
+    const cx=g.pad.l+i*bw+bw/2, w=Math.min(58,bw*0.62);
+    let lo,hi,col;
+    if(s.type==='base'){ lo=Math.min(0,s.val); hi=Math.max(0,s.val);
+      col=i===0?INK.neutral:(colorOf[a]||PAL[0]); run=s.val; }
+    else { lo=Math.min(run,run+s.val); hi=Math.max(run,run+s.val);
+      col=s.lab==='Reporting basis' ? INK.soft
+          : (s.val>=0?INK.good:INK.bad);
+      /* Connector from the previous bar's right edge to this bar's left edge.
+         Both endpoints were previously computed as cx-w/2, so every connector
+         was a zero-length line and the waterfall read as six free-floating
+         bars rather than a chain. */
+      if(i>0) g.svg.appendChild(el('line',{x1:cx-bw+w/2,x2:cx-w/2,
+        y1:Y(run),y2:Y(run),stroke:INK.rule,'stroke-dasharray':'2 3'}));
+      run+=s.val; }
+    const rect=el('rect',{x:cx-w/2,y:Y(hi),width:w,
+      height:Math.max(2,Y(lo)-Y(hi)),rx:3,fill:col,
+      opacity:s.type==='base'?.92:.8});
+    hover(rect,s.lab+'\n'+(s.type==='base'?'ROE '+pct(s.val)
+      :(s.val>=0?'+':'')+nf(s.val,2)+' pts of ROE')+
+      (s.det?'\n'+s.det:''));
+    g.svg.appendChild(rect);
+    /* Values sit outside the bar, on the side the bar is moving, so a number
+       is never painted across the bar it belongs to or across the connector. */
+    const down = s.type!=='base' && s.val<0;
+    L(g,{x:cx,y:down?Y(lo)+13:Y(hi)-6,text:
+      s.type==='base'?pct(s.val):(s.val>=0?'+':'')+nf(s.val,1),
+      size:11,attrs:{fill:INK.text,'font-weight':700}});
+    wrapWords(s.lab,maxChars).slice(0,3).forEach((ln,wi)=>{
+      g.svg.appendChild(txt('text',{x:cx,y:g.h-g.pad.b+15+wi*11,class:'ax',
+        'text-anchor':'middle'},ln));
+    });
+  });
+}
+
+/* ---------- league table movement ---------- */
+/* Levels move slowly; ranks move visibly. A bump chart is the fastest read of
+   who actually gained ground, and it is the one view people share.
+   It follows the "Ranking metric" control rather than being nailed to total
+   assets: who is gaining on deposits, on profit or on ROE is a different
+   question from who is the biggest, and the chart has to answer the one the
+   reader selected. */
+/* Rank direction. For most measures the largest value is #1; for the cost and
+   provision burden the leanest bank is. Measures with no better direction -
+   loan/deposit, leverage - fall back to largest-first and say so. */
+function rankDir(key){
+  const k=PEER_KPIS.find(x=>x[0]===key);
+  return k && k[3]===0 ? 1 : -1;
+}
+function drawBump(){
+  const m=RANK_METRICS.find(m=>m[0]===S.metric)||RANK_METRICS[0];
+  const key=m[0], label=m[1], kind=m[2], dir=rankDir(key);
+  const ps=periodsFiltered();
+  document.getElementById('bump-title').textContent=
+    'League table movement \u2014 '+label;
+
+  /* Rank within each period on the selected measure. A bank that does not
+     report it in a period simply has no point there; inventing a rank for a
+     missing value would be the only thing worse than a gap in the line. */
+  const rankAt={};
+  ps.forEach(p=>{
+    const mp={};
+    banksAt(p.as_of).filter(r=>r[key]!=null&&!isNaN(r[key]))
+      .sort((a,b)=>dir<0 ? b[key]-a[key] : a[key]-b[key])
+      .forEach((r,i)=>mp[r.bank_code]={rank:i+1,row:r});
+    rankAt[p.as_of]=mp;
+  });
+  const tracks=BANKS.map(b=>({code:b.bank_code,name:b.bank_name,
+    pts:ps.map(p=>{const e=(rankAt[p.as_of]||{})[b.bank_code];
+      return e?{p:p,rank:e.rank,row:e.row}:null;}).filter(Boolean)}))
+    .filter(t=>t.pts.length>1);
+  if(tracks.length<2||ps.length<2)
+    return empty('ch-bump','Need at least two periods of '+label.toLowerCase()+
+      ' to show movement.');
+
+  const moves=tracks.filter(t=>t.pts[0].rank!==t.pts[t.pts.length-1].rank);
+  /* Where KBA's printed rank disagrees with the asset ordering, say so rather
+     than let the chart look like it contradicts the source document. The
+     dispute only concerns the asset league, so it is only raised there. */
+  const disp=key==='total_assets'
+    ? DISPUTES.filter(d=>ps.some(p=>p.as_of===d.as_of)) : [];
+  document.getElementById('bump-hint').textContent =
+    'Rank by '+label.toLowerCase()+
+    (dir>0?' \u00b7 leanest ranks #1':'')+' \u00b7 '+ps[0].period_label+
+    ' \u2192 '+ps[ps.length-1].period_label+' \u00b7 '+
+    (moves.length? moves.length+' bank'+(moves.length>1?'s':'')+' changed position'
+                 : 'no position changes in this window')+
+    (disp.length? ' \u00b7 '+disp.length+' period'+(disp.length>1?'s':'')+
+                  ' where KBA printed a different order' : '');
+
+  const maxR=Math.max.apply(null,tracks.map(t=>
+    Math.max.apply(null,t.pts.map(q=>q.rank))));
+  const g=frame('ch-bump',Math.max(230,maxR*26+56),{l:44,r:58,t:18,b:28},
+    'Bump chart of '+label+' rank by bank over time',
+    'Lines rising toward the top of the chart indicate banks climbing the league table.');
+  const x=timeScale(g,ps.map(p=>p.as_of));
+  const Y=r=>g.pad.t+(r-1)/(Math.max(1,maxR-1))*(g.h-g.pad.t-g.pad.b);
+  for(let r=1;r<=maxR;r++){
+    g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,y1:Y(r),y2:Y(r),
+      class:'gl'}));
+    g.svg.appendChild(txt('text',{x:g.pad.l-9,y:Y(r)+3,class:'ax',
+      'text-anchor':'end'},'#'+r));
+  }
+  timeLabels(g,ps,x);
+
+  const sel=new Set([peerA(),S.bank2].filter(Boolean));
+  const paths=[], endLabels=[];
+  tracks.forEach(t=>{
+    const col=colorOf[t.code], moved=t.pts[0].rank!==t.pts[t.pts.length-1].rank;
+    let d=''; t.pts.forEach((q,i)=>d+=(i?'L':'M')+x(q.p.as_of)+' '+Y(q.rank));
+    const on=sel.size?sel.has(t.code):moved;
+    const path=el('path',{d:d,fill:'none',stroke:col,
+      'stroke-width':on?2.6:1.5,'stroke-linejoin':'round',
+      opacity:on?1:.35});
+    paths.push(path);
+    path.addEventListener('mouseenter',()=>paths.forEach(o=>
+      o.setAttribute('opacity',o===path?1:.1)));
+    path.addEventListener('mouseleave',()=>paths.forEach((o,i)=>
+      o.setAttribute('opacity',tracks[i]&&(sel.size?sel.has(tracks[i].code)
+        :tracks[i].pts[0].rank!==tracks[i].pts[tracks[i].pts.length-1].rank)
+        ?1:.35)));
+    const first=t.pts[0], last=t.pts[t.pts.length-1];
+    const delta=first.rank-last.rank;
+    hover(path,t.name+'\n'+label+'\n'+
+      first.p.period_label+': #'+first.rank+' \u00b7 '+fmt(first.row[key],kind)+
+      '\n'+last.p.period_label+': #'+last.rank+' \u00b7 '+fmt(last.row[key],kind)+
+      '\n'+
+      (delta>0?'Up '+delta+' place'+(delta>1?'s':'')
+       :delta<0?'Down '+(-delta)+' place'+(delta<-1?'s':'')
+       :'No change'));
+    g.svg.appendChild(path);
+    t.pts.forEach(q=>g.svg.appendChild(el('circle',{cx:x(q.p.as_of),cy:Y(q.rank),
+      r:on?3.4:2.2,fill:col,opacity:on?1:.35})));
+    endLabels.push({x:x(last.p.as_of)+7,y:Y(last.rank)+3,code:t.code,col:col,
+      on:on});
+  });
+  /* End-of-line codes go through the collision pass too: on metrics where two
+     banks tie, their tracks land on adjacent ranks and the codes would sit on
+     top of each other. */
+  const L=labeller();
+  endLabels.sort((a,b)=>(b.on?1:0)-(a.on?1:0)).forEach(e=>
+    L(g,{x:e.x,y:e.y,text:e.code,size:9.5,anchor:'start',
+      attrs:{fill:e.col,'font-weight':700,opacity:e.on?1:.55}}));
+  breakLines(g,x);
+}
+
+/* ---------- headlines ---------- */
+/* The point of the whole file is that someone can open it and know what changed
+   in ten seconds. These are generated from the data, never hand-written.
+   Candidates are pushed in priority order and then filtered so no single bank
+   occupies two of the seven slots - one bank leading on several measures is one
+   finding, not several, and duplicates crowd out the rest of the story. */
+function headlines(){
+  const cand=[], d=S.period, pv=prevPeriod(d), basis=deltaBasis(d);
+  const t=totalAt(d), tp=pv?totalAt(pv):null;
+  const banks=banksAt(d);
+  const p=PERIODS.find(p=>p.as_of===d)||{};
+  /* `who` is the bank this headline is about, used only for de-duplication. */
+  const push=(tone,tag,msg,sub,who)=>cand.push({tone,tag,msg,sub,who:who||null});
+
+  if(tp&&t.total_assets&&tp.total_assets){
+    const g=(t.total_assets/tp.total_assets-1)*100;
+    push(g>=0?'good':'bad','System size',
+      'Sector assets '+(g>=0?'grew':'fell')+' '+nf(Math.abs(g),2)+'% to '+
+      eurBn(t.total_assets),
+      'Versus '+basis+' \u00b7 '+banks.length+' reporting banks');
+  }
+
+  /* The two-tier read: where the sector's returns actually split. This is the
+     finding a reader should leave with, so it ranks above any single bank. */
+  const scale=banks.filter(r=>r.size_tier!=='Small'&&r.roe!=null);
+  const tail=banks.filter(r=>r.size_tier==='Small'&&r.roe!=null);
+  if(scale.length>1&&tail.length>1){
+    const sr=scale.map(r=>r.roe).sort((a,b)=>a-b);
+    const tr=tail.map(r=>r.roe).sort((a,b)=>a-b);
+    const tailAssets=tail.reduce((a,r)=>a+(r.market_share_assets||0),0);
+    if(sr[0]-tr[tr.length-1]>3)
+      push('warn','Two-tier market',
+        'The '+scale.length+' banks with scale earn '+pct(sr[0])+
+        ' to '+pct(sr[sr.length-1])+'; the '+tail.length+' smallest earn '+
+        pct(tr[0])+' to '+pct(tr[tr.length-1]),
+        'The tail is '+pct(tailAssets)+' of sector assets, so the gap is a '+
+        'viability question, not a systemic one');
+  }
+
+  if(t.loan_to_deposit!=null){
+    const pvr=tp?tp.loan_to_deposit:null;
+    const dir=pvr==null?null:t.loan_to_deposit-pvr;
+    push(t.loan_to_deposit>95?'warn':'','Funding',
+      'Loan / deposit at '+pct(t.loan_to_deposit),
+      dir==null?'Share of deposits lent out'
+        :(dir>=0?'Up ':'Down ')+nf(Math.abs(dir),1)+' pts vs '+basis+
+         ' \u00b7 loans '+eurBn(t.loans_net)+' on deposits '+eurBn(t.deposits));
+  }
+  const losing=banks.filter(r=>r.roe!=null&&r.roe<0);
+  if(losing.length) push('bad','Loss making',
+    losing.map(r=>r.bank_name).join(', ')+
+    (losing.length>1?' are':' is')+' loss making',
+    losing.map(r=>r.bank_code+' ROE '+pct(r.roe)).join(' \u00b7 '),
+    losing.length===1?losing[0].bank_code:null);
+
+  const byRoe=banks.filter(r=>r.roe!=null).sort((a,b)=>b.roe-a.roe);
+  if(byRoe.length){
+    push('good','Return leader',
+      byRoe[0].bank_name+' leads on ROE at '+pct(byRoe[0].roe),
+      'Sector spread '+pct(byRoe[byRoe.length-1].roe)+' to '+pct(byRoe[0].roe),
+      byRoe[0].bank_code);
+  }
+  const byEff=banks.filter(r=>r.expense_burden!=null)
+    .sort((a,b)=>a.expense_burden-b.expense_burden);
+  if(byEff.length){
+    push('good','Leanest',
+      byEff[0].bank_name+' runs the lowest cost & provision burden at '+
+      pct(byEff[0].expense_burden),
+      'Every euro of income costs it '+nf(byEff[0].expense_burden,0)+
+      ' cents to earn \u00b7 sector median '+
+      pct((spread(d,'expense_burden')||{}).med),
+      byEff[0].bank_code);
+  }
+
+  // Rank movement against the previous period in view, on the derived asset
+  // rank so a headline never reports a move that is only a publishing artefact.
+  if(pv){
+    const moved=[];
+    banks.forEach(r=>{
+      const before=rowsAt(pv).find(x=>x.bank_code===r.bank_code);
+      if(before&&before.rank_assets!=null&&r.rank_assets!=null&&
+         before.rank_assets!==r.rank_assets)
+        moved.push({r:r,from:before.rank_assets,to:r.rank_assets});
+    });
+    moved.sort((a,b)=>Math.abs(b.from-b.to)-Math.abs(a.from-a.to));
+    if(moved.length){
+      const m=moved[0], up=m.to<m.from;
+      const passed=banks.find(x=>x.rank_assets===m.to+(up?1:-1));
+      push(up?'good':'warn','League table',
+        m.r.bank_name+(up?' climbs to #':' slips to #')+m.to+
+        (up&&passed?', passing '+passed.bank_name:''),
+        'Was #'+m.from+' at '+basis+
+        (moved.length>1?' \u00b7 '+(moved.length-1)+' other move'+
+          (moved.length>2?'s':''):''),
+        m.r.bank_code);
+    }
+  }
+  const gm=growthMetric(d);
+  if(gm){
+    const shr=banks.filter(r=>r[gm.key]!=null)
+      .sort((a,b)=>b[gm.key]-a[gm.key]);
+    if(shr.length) push('good','Fastest growth',
+      shr[0].bank_name+' grew assets '+pct(shr[0][gm.key])+' '+gm.basis,
+      'Slowest: '+shr[shr.length-1].bank_name+' at '+
+      pct(shr[shr.length-1][gm.key]),
+      shr[0].bank_code);
+  }
+  const c=CONC.find(c=>c.as_of===d&&c.metric==='total_assets');
+  if(c) push('','Concentration',
+    'Top three hold '+pct(c.cr3)+' of sector assets',
+    'HHI '+int(c.hhi)+' \u2014 unconcentrated on DoJ/FTC thresholds');
+
+  /* One bank, one slot. Earlier candidates win because they were pushed in
+     priority order. */
+  const seen=new Set(), out=[];
+  for(const h of cand){
+    if(h.who&&seen.has(h.who)) continue;
+    if(h.who) seen.add(h.who);
+    out.push(h);
+    if(out.length===7) break;
+  }
+  return out;
+}
+function drawHeadlines(){
+  const p=PERIODS.find(p=>p.as_of===S.period)||{};
+  document.getElementById('head-sub').textContent =
+    p.period_label+' \u00b7 generated from the published figures, not edited';
+  document.getElementById('heads').innerHTML = headlines().map(h=>
+    '<div class="head '+h.tone+'"><div class="t">'+h.tag+'</div>'+
+    '<div class="m">'+h.msg+'</div><div class="s">'+h.sub+'</div></div>')
+    .join('');
+}
+function headlineText(){
+  const p=PERIODS.find(p=>p.as_of===S.period)||{};
+  return ['Kosovo banking sector \u2014 '+p.period_label]
+    .concat(headlines().map(h=>'\u2022 '+h.msg+' ('+h.sub+')'))
+    .concat(['Source: KBA statistical releases.']).join('\n');
+}
+function copyText(s,msg){
+  const done=()=>say(msg);
+  if(typeof navigator!=='undefined'&&navigator.clipboard&&
+     navigator.clipboard.writeText){
+    navigator.clipboard.writeText(s).then(done,()=>fallback());
+  } else fallback();
+  function fallback(){
+    // file:// pages often have no clipboard permission, so fall back to a
+    // hidden textarea and the legacy copy command.
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=s; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove(); done();
+    }catch(e){ say('Copy unavailable \u2014 select the text manually'); }
+  }
+}
+
+/* ---------- sourced sector context ---------- */
+function drawContext(){
+  const items=DATA.sector_context||[];
+  document.getElementById('ctx').innerHTML = items.map(c=>
+    '<div class="ctxi"><div class="cl">'+c.label+'</div>'+
+    '<div class="cv">'+c.value+'</div>'+
+    '<div class="cn">'+c.note+'</div>'+
+    '<div class="cs">'+c.source+'</div></div>').join('');
+}
+
+/* ---------- drill-down ---------- */
+const DRILL=[['total_assets','Assets'],['loans_net','Loans'],
+             ['deposits','Deposits'],['equity_capital','Equity']];
+
+function drawDrill(){
+  const b=BANKS.find(b=>b.bank_code===S.bank);
+  const name=S.bank==='TOTAL'?'Banking system total':(b?b.bank_name:S.bank);
+  document.getElementById('drill-title').textContent=
+    'Bank drill-down \u2014 '+name;
+  legend('lg-drill',DRILL.map((d,i)=>({key:d[0],name:d[1],
+    col:PAL[i%PAL.length],on:true})),null);
+  const ser=seriesFor(S.bank);
+  if(ser.length<2) return empty('ch-drill',
+    name+' has fewer than two observations under this frequency filter.');
+
+  const vals=[];
+  DRILL.forEach(function(dm){
+    const k=dm[0], base=ser.find(r=>r[k]!=null);
+    if(!base||!base[k]) return;
+    ser.forEach(r=>{if(r[k]!=null) vals.push(r[k]/base[k]*100);});
+  });
+  if(!vals.length) return empty('ch-drill','No comparable series for this bank.');
+
+  const g=frame('ch-drill',300,{l:44,r:16,t:18,b:28},
+    'Indexed growth of key balance-sheet lines for '+name,
+    'All series rebased to 100 at the first available period in view.');
+  const x=timeScale(g,ser.map(r=>r.as_of));
+  const ticks=niceTicks(Math.min.apply(null,vals)-3,
+                        Math.max.apply(null,vals)+3,4);
+  const y=linScale(g,ticks[0],ticks[ticks.length-1]);
+  yAxis(g,ticks,y,t=>nf(t,0));
+  timeLabels(g,ser,x);
+  if(ticks[0]<100&&ticks[ticks.length-1]>100)
+    g.svg.appendChild(el('line',{x1:g.pad.l,x2:g.w-g.pad.r,y1:y(100),y2:y(100),
+      stroke:INK.rule,'stroke-dasharray':'2 3'}));
+
+  DRILL.forEach(function(dm,si){
+    const k=dm[0], base=ser.find(r=>r[k]!=null);
+    if(!base||!base[k]) return;
+    const col=PAL[si%PAL.length]; let d='';
+    ser.forEach(r=>{if(r[k]==null)return;
+      d+=(d?'L':'M')+x(r.as_of)+' '+y(r[k]/base[k]*100);});
+    if(d) g.svg.appendChild(el('path',{d:d,fill:'none',stroke:col,
+      'stroke-width':2}));
+  });
+  ser.forEach(r=>{
+    const lines=DRILL.map(function(dm){
+      const k=dm[0], base=ser.find(s=>s[k]!=null);
+      if(!base||!base[k]||r[k]==null) return '  '+dm[1]+': \u2013';
+      return '  '+dm[1]+': '+eurBn(r[k])+' \u00b7 index '+nf(r[k]/base[k]*100,1);
+    }).join('\n');
+    const hit=el('rect',{x:x(r.as_of)-9,y:g.pad.t,width:18,
+      height:g.h-g.pad.t-g.pad.b,fill:'transparent'});
+    hover(hit,name+' \u00b7 '+r.period_label+'\n'+lines);
+    g.svg.appendChild(hit);
+  });
+  breakLines(g,x);
+}
+
+/* ---------- legend (keyboard-reachable buttons, not spans) ---------- */
+function legend(id,items,onClick){
+  const box=document.getElementById(id); box.innerHTML='';
+  items.forEach(it=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.innerHTML='<i style="background:'+it.col+'"></i>'+it.name;
+    if(onClick){
+      b.setAttribute('aria-pressed',String(it.on!==false));
+      b.title=(it.on!==false?'Hide ':'Show ')+it.name;
+      b.onclick=()=>onClick(it.key);
+    }else{
+      b.setAttribute('aria-pressed','true');
+      b.disabled=true;
+      b.style.cursor='default';
+    }
+    box.appendChild(b);
+  });
+}
+
+/* ---------- roster-break banner ---------- */
+function drawBreaks(){
+  const host=document.getElementById('breaks');
+  const parts=[];
+  const newest=PERIODS[PERIODS.length-1];
+  /* A shared link can pin an old period. Say so plainly, because the rest of the
+     page otherwise reads as the current state of the sector. */
+  if(S.period&&S.period!==newest.as_of){
+    const cur=PERIODS.find(p=>p.as_of===S.period)||{};
+    parts.push('<div class="banner"><span>\u25f4</span><div><b>Viewing '+
+      cur.period_label+', which is not the latest release.</b> '+
+      newest.period_label+' figures are available.</div>'+
+      '<button class="x" id="go-latest" title="Jump to '+newest.period_label+'"'+
+      ' aria-label="Jump to the latest release">Go to '+newest.period_label+
+      '</button></div>');
+  }
+  const vb=visibleBreaks();
+  if(vb.length&&!S.brkDismissed) vb.forEach(b=>parts.push(
+    '<div class="banner"><span>\u26a0</span><div><b>Reporting-population break at '+
+    b.as_of+'.</b> '+breakLabel(b)+', taking the panel from '+b.n_before+
+    ' to '+b.n_after+' banks. Market shares, HHI, CR3 and CR5 all shift '+
+    'mechanically at this point \u2014 movement across it is not competitive '+
+    'dynamics. Marked on every time-series chart.</div>'+
+    '<button class="x brk" aria-label="Dismiss notice">\u00d7</button></div>'));
+  host.innerHTML=parts.join('');
+  const jump=document.getElementById('go-latest');
+  if(jump) jump.onclick=goLatest;
+  Array.prototype.forEach.call(host.querySelectorAll('.brk'),
+    x=>x.onclick=()=>{S.brkDismissed=true; drawBreaks();});
+}
+
+/* Return to the newest release from anywhere, clearing any pinned period and
+   any period-type filter that excludes it. */
+function goLatest(){
+  const newest=PERIODS[PERIODS.length-1];
+  S.pinned=false;
+  if(!periodsFiltered().some(p=>p.as_of===newest.as_of)){
+    S.freq='ALL';
+    Array.prototype.forEach.call(document.querySelectorAll('[data-f]'),
+      x=>x.setAttribute('aria-pressed',String(x.dataset.f==='ALL')));
+  }
+  fillPeriods(true); render(); syncUrl();
+  say('Showing the latest release, '+newest.period_label);
+}
+
+/* ---------- KPIs ---------- */
+function weighted(d,field,weight){
+  const rows=banksAt(d).filter(r=>r[field]!=null&&r[weight]!=null);
+  const w=rows.reduce((s,r)=>s+r[weight],0);
+  return w? rows.reduce((s,r)=>s+r[field]*r[weight],0)/w : null;
+}
+const weightedRoe=d=>weighted(d,'roe','equity_capital');
+const weightedRoa=d=>weighted(d,'roa','total_assets');
+
+/* ---------- the governing thought ---------- */
+/* Every panel below answers "what is true?". This line answers "so what?".
+   It is assembled from the same figures, so it can never drift from the
+   charts, and it leads with the conclusion rather than the inputs. */
+function answerLine(){
+  const d=S.period, t=totalAt(d), banks=banksAt(d);
+  const p=PERIODS.find(p=>p.as_of===d)||{};
+  const gm=growthMetric(d);
+  const g=gm&&t[gm.key]!=null ? t[gm.key]
+        : (function(){const b=banks.filter(r=>r[gm&&gm.key]!=null);
+            return b.length? b.reduce((s,r)=>s+r[gm.key]*r.total_assets,0)/
+              b.reduce((s,r)=>s+r.total_assets,0) : null;})();
+
+  const roes=banks.filter(r=>r.roe!=null);
+  const scale=roes.filter(r=>r.size_tier!=='Small').map(r=>r.roe)
+    .sort((a,b)=>a-b);
+  const tail=roes.filter(r=>r.size_tier==='Small');
+  const tailRoe=tail.map(r=>r.roe).sort((a,b)=>a-b);
+  const tailShare=tail.reduce((s,r)=>s+(r.market_share_assets||0),0);
+  const losing=roes.filter(r=>r.roe<0);
+
+  let a='Sector assets '+eurBn(t.total_assets);
+  if(g!=null) a+=', '+(g>=0?'up ':'down ')+pct(Math.abs(g))+
+    (gm.short==='YTD'?' year to date':' year on year');
+  if(scale.length&&tailRoe.length&&scale[0]-tailRoe[tailRoe.length-1]>3)
+    a+=' \u2014 returns are healthy at scale ('+pct(scale[0])+'\u2013'+
+       pct(scale[scale.length-1])+' ROE) and weak in the tail ('+
+       pct(tailRoe[0])+'\u2013'+pct(tailRoe[tailRoe.length-1])+').';
+  else if(scale.length)
+    a+=' \u2014 ROE runs '+pct(Math.min.apply(null,roes.map(r=>r.roe)))+
+       ' to '+pct(Math.max.apply(null,roes.map(r=>r.roe)))+' across the sector.';
+  else a+='.';
+
+  const bits=[];
+  if(tail.length) bits.push('The '+tail.length+' smallest banks are '+
+    pct(tailShare)+' of assets, so the gap is a viability question for them '+
+    'rather than a systemic one');
+  if(losing.length) bits.push(losing.map(r=>r.bank_name).join(' and ')+
+    (losing.length>1?' are':' is')+' loss making');
+  if(t.loan_to_deposit!=null) bits.push('funding is '+
+    (t.loan_to_deposit>95?'tight':'comfortable')+' at '+
+    pct(t.loan_to_deposit)+' loan / deposit');
+  bits.push('asset quality is not in this data \u2014 KBA publishes no NPL or '+
+    'capital ratio here');
+  return {a:a,b:bits.join(' \u00b7 ')+'.',period:p.period_label};
+}
+function drawAnswer(){
+  const r=answerLine();
+  document.getElementById('answer').innerHTML =
+    '<div class="a">'+r.a+'</div><div class="b">'+r.b+'</div>';
+}
+
+function drawKPIs(){
+  const t=totalAt(S.period), pv=prevPeriod(S.period), tp=pv?totalAt(pv):{};
+  const c=CONC.find(c=>c.as_of===S.period&&c.metric==='total_assets')||{};
+  const p=PERIODS.find(p=>p.as_of===S.period)||{};
+  const basis=deltaBasis(S.period);
+  const brk=BREAKS.find(b=>b.as_of===S.period);
+  /* The comparison basis is stated once under the strip rather than repeated in
+     every card, which is both more honest and what lets ten cards fit a row. */
+  document.getElementById('kpi-basis').textContent = basis
+    ? 'Changes compare against ' + basis + '.'
+    : 'No earlier period in view, so no changes are shown.';
+  const delta=(a,b)=>{
+    if(a==null||b==null||!b||!basis) return '<div class="d">–</div>';
+    const d=(a/b-1)*100;
+    return '<div class="d '+(d>=0?'up':'down')+'" title="vs '+basis+'">'+
+           (d>=0?'\u25b2':'\u25bc')+' '+nf(Math.abs(d),2)+'%</div>';
+  };
+  const q=s=>'<span class="info" title="'+s+'" tabindex="0" role="note" '+
+    'aria-label="'+s+'">i</span>';
+  const burden=spread(S.period,'expense_burden');
+  const cards=[
+    ['Total assets','',eurBn(t.total_assets),delta(t.total_assets,tp.total_assets)],
+    ['Loans (net)','',eurBn(t.loans_net),delta(t.loans_net,tp.loans_net)],
+    ['Deposits','',eurBn(t.deposits),delta(t.deposits,tp.deposits)],
+    ['Equity','',eurBn(t.equity_capital),
+      delta(t.equity_capital,tp.equity_capital)],
+    ['Profit YTD',q('Cumulative from 1 January and resets each year, so a '+
+      'change against the prior period would be meaningless and is not shown.'),
+      eur(t.net_profit),
+      '<div class="d">'+(p.month||'')+'-month'+'</div>'],
+    ['Income YTD',q('Cumulative from 1 January; resets each year.'),
+      eur(t.total_income),
+      '<div class="d">margin '+pct(t.net_margin)+'</div>'],
+    ['Weighted ROE',q('Equity-weighted mean of published bank ROE. KBA prints '+
+      'no system-level ROE. Bank ROE is annualised on a six-period average '+
+      'equity denominator.'),
+      pct(weightedRoe(S.period)),
+      '<div class="d">ROA '+pct(weightedRoa(S.period))+'</div>'],
+    ['Loan / deposit','',pct(t.loan_to_deposit),
+      '<div class="d">eq/assets '+pct(t.equity_ratio)+'</div>'],
+    ['Median burden',q('Median cost & provision burden: (income − profit) / '+
+      'income. An upper bound on cost-to-income, which KBA does not publish.'),
+      pct(burden?burden.med:null),
+      '<div class="d">'+(burden?pct(burden.min)+'–'+pct(burden.max):'–')+'</div>'],
+    ['HHI (assets)',q('Herfindahl-Hirschman Index on asset shares. Below 1500 '+
+      'is unconcentrated under US DoJ/FTC guidelines.'),int(c.hhi),
+      '<div class="d">CR3 '+pct(c.cr3)+
+      (brk?' <span class="down">• break</span>':'')+'</div>'],
+  ];
+  document.getElementById('kpis').innerHTML = cards.map(c=>
+    '<div class="kpi"><div class="k">'+c[0]+c[1]+'</div><div class="v">'+
+    c[2]+'</div>'+(c[3]||'')+'</div>').join('');
+}
+
+/* ---------- table ---------- */
+/* Headers are abbreviated because the column header, not the value, was what
+   set every column's width and pushed the table off the right edge. */
+const COLS=[
+  ['bank_name','Bank','txt'],['ownership','Origin','txt'],
+  ['total_assets','Assets','eur'],['market_share_assets','Share','pct'],
+  ['loans_net','Loans','eur'],['deposits','Deposits','eur'],
+  ['investments_securities','Sec.','eur'],
+  ['placement_with_banks','Interbk','eur'],
+  ['equity_capital','Equity','eur'],['total_income','Income','eur'],
+  ['net_profit','Profit','eur'],['roa','ROA','pct'],['roe','ROE','pct'],
+  ['expense_burden','Burden','pct'],['net_margin','Margin','pct'],
+  ['income_yield','Yield','pct'],
+  ['loan_to_deposit','L/D','pct'],['equity_ratio','Eq/A','pct'],
+  ['leverage','Lev.','x'],
+  ['employees','Staff','num'],['branches','Branch','num'],
+  ['assets_per_employee','Assets/FTE','eur'],
+  ['total_assets_ytd_pct','YTD %','pct'],
+  ['total_assets_yoy_pct','YoY %','pct'],
+];
+/* Twenty-four columns do not fit a laptop screen at a readable type size, and
+   a table nobody can see whole is a table nobody reads. Five are held back by
+   default: interbank placements are the smallest balance-sheet line, net margin
+   and income yield are the two inputs the ROE bridge already decomposes,
+   leverage is the reciprocal of equity/assets, and year-on-year growth is empty
+   for every bank in the current release. All five stay one click away and all
+   twenty-four are always in the CSV export. */
+const SECONDARY_COLS = new Set(['placement_with_banks','net_margin',
+  'income_yield','leverage','total_assets_yoy_pct']);
+const tableCols = () => S.tblAll ? COLS : COLS.filter(c=>!SECONDARY_COLS.has(c[0]));
+function sortedRows(){
+  const k=S.sort[0], dir=S.sort[1];
+  return banksAt(S.period).slice().sort((a,b)=>{
+    const av=a[k], bv=b[k];
+    if(av==null&&bv==null) return 0;
+    if(av==null) return 1;
+    if(bv==null) return -1;
+    if(typeof av==='string'||typeof bv==='string')
+      return dir*String(av).localeCompare(String(bv));
+    return dir*(av-bv);
+  });
+}
+function drawTable(){
+  const p=PERIODS.find(p=>p.as_of===S.period)||{};
+  document.getElementById('tbl-title').textContent=
+    'Bank detail \u2014 '+(p.period_label||'');
+  const cols=tableCols();
+  document.getElementById('tbl-hint').textContent=
+    'Click a column header to sort. EUR values are auto-scaled '+
+    '(k = thousand, m = million, bn = billion). '+
+    (S.tblAll ? 'All '+COLS.length+' columns shown.'
+              : cols.length+' of '+COLS.length+' columns shown \u2014 interbank '+
+                'placements, net margin, income yield, leverage and '+
+                'year-on-year growth are under \u201cAll columns\u201d and always '+
+                'in the CSV export.');
+  const dir=S.sort[1];
+  const rows=sortedRows(), tot=totalAt(S.period);
+  const head='<thead><tr>'+cols.map(function(c){
+    const on=S.sort[0]===c[0];
+    return '<th data-c="'+c[0]+'" scope="col" tabindex="0" aria-sort="'+
+      (on?(dir<0?'descending':'ascending'):'none')+'">'+c[1]+
+      (on?(dir<0?' \u25bc':' \u25b2'):'')+'</th>';}).join('')+'</tr></thead>';
+  const cell=(r,c,kind)=> kind==='txt' ? (r[c]==null?'\u2013':r[c]) : fmt(r[c],kind);
+  const body='<tbody>'+rows.map(r=>'<tr>'+cols.map(function(c){
+      return c[0]==='bank_name'
+        ? '<th scope="row" style="font-weight:400">'+badge(r.bank_code)+
+          cell(r,c[0],c[2])+'</th>'
+        : '<td>'+cell(r,c[0],c[2])+'</td>';}).join('')+'</tr>').join('')
+    +'<tr class="tot">'+cols.map(function(c){
+      return '<td>'+(c[0]==='bank_name'?'BANKING SYSTEM':
+        (c[0]==='ownership'?'\u2013':cell(tot,c[0],c[2])))+'</td>';
+    }).join('')+'</tr></tbody>';
+  const t=document.getElementById('tbl');
+  t.innerHTML='<caption class="sr">Bank-level detail for '+
+    (p.period_label||'')+'</caption>'+head+body;
+  Array.prototype.forEach.call(t.querySelectorAll('th[data-c]'),function(th){
+    const go=function(){
+      const c=th.dataset.c;
+      S.sort = S.sort[0]===c ? [c,-S.sort[1]] : [c,-1];
+      drawTable(); syncUrl();
+      say('Sorted by '+th.textContent.trim()+' '+
+        (S.sort[1]<0?'descending':'ascending'));
+    };
+    th.onclick=go;
+    th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};
+  });
+}
+
+/* ---------- export ---------- */
+function csvCell(v){
+  if(v==null||v==='') return '';
+  const s=String(v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function download(name,mime,parts){
+  const url=URL.createObjectURL(new Blob(parts,{type:mime}));
+  const a=document.createElement('a');
+  a.href=url; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+function exportPeriodCsv(){
+  const p=PERIODS.find(p=>p.as_of===S.period)||{};
+  const cols=COLS.map(c=>c[0]);
+  const head=['as_of','period_label'].concat(cols);
+  const line=r=>[S.period,p.period_label].concat(cols.map(c=>r[c]))
+    .map(csvCell).join(',');
+  const body=sortedRows().concat([totalAt(S.period)]).map(line);
+  download('kba_bank_detail_'+S.period+'.csv','text/csv;charset=utf-8',
+    ['\ufeff'+[head.join(',')].concat(body).join('\r\n')]);
+  say('Period detail exported as CSV');
+}
+function exportFullCsv(){
+  const cols=Object.keys(ROWS[0]);
+  const body=ROWS.map(r=>cols.map(c=>csvCell(r[c])).join(','));
+  download('kba_full_panel.csv','text/csv;charset=utf-8',
+    ['\ufeff'+[cols.join(',')].concat(body).join('\r\n')]);
+  say('Full panel exported as CSV');
+}
+/* Dark charts get pasted into decks, so give them a real raster with a
+   background and the axis styles inlined. */
+/* A raster has no stylesheet, so the axis classes and the background have to be
+   inlined - and both follow whichever theme is on screen, so an exported chart
+   matches what the user was looking at when they clicked. */
+function svgCss(){
+  return '.ax{fill:'+INK.muted+';font-size:10.5px}'+
+    '.axb{fill:'+INK.text+';font-size:10.5px;font-weight:600}'+
+    '.gl{stroke:'+INK.grid+';stroke-width:1}'+
+    'text{font-family:Segoe UI,Arial,sans-serif}';
+}
+/* On screen the charts are `overflow:visible`, so anything drawn outside the
+   viewBox still shows: a bank code the collision-avoider nudged above the plot,
+   the roster-break marker that deliberately straddles the top axis, the halo
+   stroke around every placed label, an end label past the right edge. A canvas
+   raster has no such licence - it is clipped hard to the box - which is why
+   exported charts came back with the top shaved off. So measure what was
+   actually painted and grow the box to fit it, rather than trusting the
+   nominal frame. getBBox reports geometry only and ignores stroke width, hence
+   the margin. Union with the viewBox, never replace it: the box must not
+   shrink to the ink and crop the axis whitespace the chart is composed in. */
+function exportBox(src,vb){
+  const m=5;
+  let x=vb[0],y=vb[1],w=vb[2],h=vb[3],b=null;
+  try{ if(src.getBBox) b=src.getBBox(); }catch(e){}
+  if(b&&isFinite(b.x)&&isFinite(b.y)&&b.width>0&&b.height>0){
+    const x1=Math.min(x,b.x-m), y1=Math.min(y,b.y-m),
+          x2=Math.max(x+w,b.x+b.width+m), y2=Math.max(y+h,b.y+b.height+m);
+    x=x1; y=y1; w=x2-x1; h=y2-y1;
+  }
+  return {x:x,y:y,w:Math.ceil(w),h:Math.ceil(h)};
+}
+function exportPng(hostId){
+  const src=document.querySelector('#'+hostId+' svg');
+  if(!src) return;
+  const clone=src.cloneNode(true);
+  const vb=(clone.getAttribute('viewBox')||'0 0 800 300').split(/\s+/).map(Number);
+  const bx=exportBox(src,vb), scale=2;
+  clone.setAttribute('xmlns',NS);
+  clone.setAttribute('viewBox',bx.x+' '+bx.y+' '+bx.w+' '+bx.h);
+  clone.setAttribute('width',bx.w); clone.setAttribute('height',bx.h);
+  const style=el('style'); style.textContent=svgCss();
+  clone.insertBefore(style,clone.firstChild);
+  clone.insertBefore(el('rect',{x:bx.x,y:bx.y,width:bx.w,height:bx.h,
+    fill:(THEMES[S.theme]||THEMES.light).ground}), style.nextSibling);
+  const svgText=new XMLSerializer().serializeToString(clone);
+  const img=new Image();
+  img.onload=function(){
+    const cv=document.createElement('canvas');
+    cv.width=bx.w*scale; cv.height=bx.h*scale;
+    const ctx=cv.getContext('2d');
+    ctx.setTransform(scale,0,0,scale,0,0);
+    ctx.drawImage(img,0,0);
+    cv.toBlob(function(b){
+      if(b) download('kba_'+hostId+'_'+S.period+'.png','image/png',[b]);
+      say('Chart exported as PNG');
+    });
+  };
+  img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svgText);
+}
+
+/* ---------- shareable state ---------- */
+/* Chrome refuses history.replaceState from a file:// document (opaque origin),
+   and this dashboard is meant to be opened straight off disk, so fall back to
+   a same-document hash replace rather than losing the feature. */
+
+/* The period is deliberately NOT persisted here. This file is opened to see the
+   newest figures, so browsing to an old period and reloading - or re-running the
+   pipeline after a new release lands - must never strand the reader on stale
+   data. A period only survives in a link someone explicitly chose to share. */
+function urlState(pinPeriod){
+  const q=new URLSearchParams({f:S.freq,m:S.metric,b:S.bank,
+    b2:S.bank2,s:S.sysMode,o:S.sort[0],d:S.sort[1]<0?'d':'a'});
+  if(pinPeriod) q.set('p',S.period);
+  if(S.peerTier) q.set('tier','1');
+  if(S.shareLog) q.set('log','1');
+  if(S.theme!=='light') q.set('t',S.theme);
+  if(S.shareOff.size) q.set('hide',Array.from(S.shareOff).join('.'));
+  return '#'+q.toString();
+}
+function syncUrl(){
+  const h=urlState(false);
+  try{ history.replaceState(null,'',h); }
+  catch(e){ try{ location.replace(h); }catch(e2){ /* URL state unavailable */ } }
+}
+function shareUrl(){
+  return String(location.href||'').split('#')[0]+urlState(true);
+}
+function readUrl(){
+  const h=(location.hash||'').replace(/^#/,'');
+  if(!h) return;
+  const q=new URLSearchParams(h);
+  if(['ALL','Q','M'].indexOf(q.get('f'))>=0) S.freq=q.get('f');
+  if(PERIODS.some(p=>p.as_of===q.get('p'))){ S.period=q.get('p'); S.pinned=true; }
+  if(RANK_METRICS.some(m=>m[0]===q.get('m'))) S.metric=q.get('m');
+  if(q.get('b')==='TOTAL'||BANKS.some(b=>b.bank_code===q.get('b')))
+    S.bank=q.get('b');
+  if(q.get('b2')===''||BANKS.some(b=>b.bank_code===q.get('b2')))
+    S.bank2=q.get('b2')||'';
+  if(STACKS[q.get('s')]) S.sysMode=q.get('s');
+  if(q.get('tier')==='1') S.peerTier=true;
+  if(q.get('log')==='1') S.shareLog=true;
+  if(THEMES[q.get('t')]) S.theme=q.get('t');
+  if(COLS.some(c=>c[0]===q.get('o')))
+    S.sort=[q.get('o'),q.get('d')==='a'?1:-1];
+  (q.get('hide')||'').split('.').filter(Boolean).forEach(c=>{
+    if(BANKS.some(b=>b.bank_code===c)) S.shareOff.add(c);});
+}
+function say(msg){document.getElementById('live').textContent=msg;}
+
+/* ---------- wiring ---------- */
+/* `snap` forces the newest period in the current view. Used on load and whenever
+   the period type changes: switching to quarter-ends and back must return to the
+   latest month, not leave the reader on whichever period happened to stay valid
+   across both filters. */
+function fillPeriods(snap){
+  const sel=document.getElementById('period');
+  const ps=periodsFiltered();
+  const latest=ps[ps.length-1].as_of;
+  sel.innerHTML=ps.slice().reverse().map(p=>
+    '<option value="'+p.as_of+'">'+p.period_label+' \u00b7 '+p.as_of+
+    (p.as_of===latest?' \u00b7 latest':'')+
+    '</option>').join('');
+  if(snap||!ps.find(p=>p.as_of===S.period)) S.period=latest;
+  sel.value=S.period;
+  /* Monthly releases only begin in January 2026, so say so rather than let the
+     filter look broken when the series suddenly starts mid-panel. */
+  const monthly=PERIODS.filter(p=>p.frequency==='M');
+  document.getElementById('sys-sub').textContent =
+    S.freq==='Q'
+      ? ps.length+' quarter-ends \u00b7 '+ps[0].period_label+' \u2192 '+
+        ps[ps.length-1].period_label+
+        ' \u00b7 includes quarter-ends published in monthly releases'
+    : S.freq==='M'
+      ? ps.length+' monthly releases \u00b7 KBA began publishing monthly only in '+
+        (monthly.length?monthly[0].period_label:'2026')+
+        ', so this view cannot reach further back'
+    : ps.length+' periods \u00b7 '+ps[0].period_label+' \u2192 '+
+        ps[ps.length-1].period_label+' \u00b7 mixed quarterly and monthly cadence';
+}
+/* The header and the filter bar are position:sticky, so everything below has
+   to know how tall they actually are - both re-wrap with viewport width, and
+   the detail table's own sticky <thead> has to park under them rather than
+   behind them. Measured, never assumed; re-measured on resize. */
+function stick(){
+  const h=document.getElementById('hd'), c=document.getElementById('controls');
+  const st=document.documentElement.style;
+  if(!h||!c||!st.setProperty) return;
+  const hh=h.offsetHeight||0, ch=c.offsetHeight||0;
+  st.setProperty('--hdh',hh+'px');
+  st.setProperty('--stick',(hh+ch)+'px');
+}
+/* Hysteresis on the collapse: collapsing shortens the document slightly, so a
+   single threshold could flap the header on and off around the trip point. */
+function onScroll(){
+  const y=window.scrollY||0, el=document.documentElement;
+  const on=el.getAttribute('data-scrolled')==='1';
+  if(!on && y>44){ el.setAttribute('data-scrolled','1'); stick(); }
+  else if(on && y<18){ el.setAttribute('data-scrolled','0'); stick(); }
+}
+function init(){
+  readUrl();
+  /* Precedence: an explicitly shared link wins, then this browser's own saved
+     choice, then the light default. The OS colour scheme is deliberately NOT
+     consulted - the light theme is the house style this dashboard is published
+     in, and a reader who never asked for dark should not get it. */
+  applyTheme(THEMES[S.theme] && S.theme!=='light' ? S.theme
+             : (savedTheme()||S.theme||'light'));
+  const newest=PERIODS[PERIODS.length-1];
+  /* The title no longer carries the KBA name, so the provenance has to be
+     stated here instead. The association publishes the source tables; the
+     ratios, ranks and rank-disagreement flags on this page are ours. */
+  document.getElementById('coverage').textContent =
+    'Independent analysis of Kosovo Banking Association publications \u00b7 '+
+    'Latest release: '+newest.period_label+' (as at '+newest.as_of+') \u00b7 '+
+    PERIODS.length+' reporting periods from '+PERIODS[0].period_label+' \u00b7 '+
+    BANKS.length+' institutions observed \u00b7 '+DATA.generated_from;
+  document.getElementById('gen').textContent =
+    ROWS.length+' bank-period observations across '+PERIODS.length+
+    ' releases. Charts are inline SVG with no external dependencies; '+
+    'this file works offline.';
+  const gaps=DATA.unpublished_metrics||[];
+  document.getElementById('gaps').innerHTML = gaps.length
+    ? '<b>Not published in these KBA releases.</b> The following are absent '+
+      'from the source \u2014 that is a coverage gap, not a clean bill of '+
+      'health. Any credit or supervisory view needs them from CBK or from '+
+      'individual bank disclosures:<ul>'+
+      gaps.map(g=>'<li>'+g+'</li>').join('')+'</ul>'
+    : '';
+
+  document.getElementById('metric').innerHTML =
+    RANK_METRICS.map(m=>'<option value="'+m[0]+'">'+m[1]+'</option>').join('');
+  const bankOpts = BANKS.map(b=>'<option value="'+b.bank_code+'">'+
+    b.bank_name+'</option>').join('');
+  document.getElementById('bank').innerHTML =
+    '<option value="TOTAL">Banking system total</option>'+bankOpts;
+  document.getElementById('bank2').innerHTML =
+    '<option value="">— sector only —</option>'+bankOpts;
+  document.getElementById('metric').value=S.metric;
+  document.getElementById('bank').value=S.bank;
+  document.getElementById('bank2').value=S.bank2;
+  drawContext();
+  /* Open on the newest release. Only a deliberately shared link pins an older
+     period, and that case is called out below so nobody mistakes it for current. */
+  fillPeriods(!S.pinned);
+  /* Land on a populated comparison rather than an empty prompt: the two largest
+     banks are the pairing almost everyone opens this file to look at. */
+  const top=banksAt(S.period);
+  if(!S.bank)  S.bank  = top[0] ? top[0].bank_code : 'TOTAL';
+  if(!S.bank2) S.bank2 = top[1] ? top[1].bank_code : '';
+  document.getElementById('bank').value=S.bank;
+  document.getElementById('bank2').value=S.bank2;
+  const each=(sel,fn)=>Array.prototype.forEach.call(
+    document.querySelectorAll(sel),fn);
+  each('[data-f]',b=>b.setAttribute('aria-pressed',String(b.dataset.f===S.freq)));
+  each('[data-mode]',b=>b.setAttribute('aria-pressed',
+    String(b.dataset.mode===S.sysMode)));
+  each('[data-tier]',b=>b.setAttribute('aria-pressed',
+    String((b.dataset.tier==='1')===S.peerTier)));
+  each('[data-share]',b=>b.setAttribute('aria-pressed',
+    String((b.dataset.share==='log')===S.shareLog)));
+  each('[data-tbl]',b=>b.setAttribute('aria-pressed',
+    String((b.dataset.tbl==='1')===S.tblAll)));
+  each('[data-theme]',b=>b.setAttribute('aria-pressed',
+    String(b.dataset.theme===S.theme)));
+
+  document.getElementById('period').onchange=e=>{
+    S.period=e.target.value; render(); syncUrl();};
+  /* The ranking metric drives the league-table movement chart as well as the
+     ranking bars, so both have to be redrawn. */
+  document.getElementById('metric').onchange=e=>{
+    S.metric=e.target.value; drawRank(); drawBump(); syncUrl();};
+  document.getElementById('bank').onchange=e=>{
+    S.bank=e.target.value; drawDrill(); drawPeer(); drawBridge(); drawEff();
+    drawBump(); syncUrl();};
+  document.getElementById('bank2').onchange=e=>{
+    S.bank2=e.target.value; drawPeer(); drawEff(); drawBump(); syncUrl();};
+  document.getElementById('copy-heads').onclick=()=>
+    copyText(headlineText(),'Headlines copied to the clipboard');
+  document.getElementById('copy-link').onclick=()=>{
+    copyText(shareUrl(),
+      'Link copied — it reopens on '+
+      ((PERIODS.find(p=>p.as_of===S.period)||{}).period_label||'this period'));
+  };
+  each('[data-f]',b=>b.onclick=()=>{
+    S.freq=b.dataset.f;
+    each('[data-f]',x=>x.setAttribute('aria-pressed',String(x===b)));
+    fillPeriods(true); render(); syncUrl();
+    say('Period type: '+b.textContent+' · showing '+
+      ((PERIODS.find(p=>p.as_of===S.period)||{}).period_label||''));
+  });
+  each('[data-mode]',b=>b.onclick=()=>{
+    S.sysMode=b.dataset.mode;
+    each('[data-mode]',x=>x.setAttribute('aria-pressed',String(x===b)));
+    drawSystem(); syncUrl();
+  });
+  each('[data-tier]',b=>b.onclick=()=>{
+    S.peerTier=b.dataset.tier==='1';
+    each('[data-tier]',x=>x.setAttribute('aria-pressed',String(x===b)));
+    drawPeer(); syncUrl();
+    say(S.peerTier?'Comparing within the same size tier':'Comparing against all banks');
+  });
+  each('[data-share]',b=>b.onclick=()=>{
+    S.shareLog=b.dataset.share==='log';
+    each('[data-share]',x=>x.setAttribute('aria-pressed',String(x===b)));
+    drawShare(); syncUrl();
+  });
+  each('[data-tbl]',b=>b.onclick=()=>{
+    S.tblAll=b.dataset.tbl==='1';
+    each('[data-tbl]',x=>x.setAttribute('aria-pressed',String(x===b)));
+    drawTable();
+    say(S.tblAll?'Showing all '+COLS.length+' columns'
+                :'Showing the key columns only');
+  });
+  each('[data-theme]',b=>b.onclick=()=>{
+    each('[data-theme]',x=>x.setAttribute('aria-pressed',String(x===b)));
+    applyTheme(b.dataset.theme,true);
+    saveTheme(S.theme); syncUrl();
+    say(S.theme==='dark'
+      ? 'Dark theme. Printing and PDF export still use the light theme.'
+      : 'Light theme \u2014 McKinsey house style.');
+  });
+  document.getElementById('exp-csv').onclick=exportPeriodCsv;
+  document.getElementById('exp-all').onclick=exportFullCsv;
+  document.getElementById('exp-print').onclick=printLight;
+  each('.png',b=>b.onclick=()=>exportPng(b.dataset.png));
+
+  document.getElementById('latest').onclick=goLatest;
+
+  /* Ctrl+P bypasses the button, so catch the print event too. The dark
+     stylesheet is screen-only, but chart ink is set as SVG attributes that no
+     stylesheet can reach, so the charts have to be re-rendered in light ink. */
+  try{
+    window.addEventListener('beforeprint',()=>{
+      if(S.theme!=='light'){ printRestore=S.theme; applyTheme('light',true); }
+    });
+    window.addEventListener('afterprint',()=>{
+      if(printRestore){ applyTheme(printRestore,true); printRestore=null; }
+    });
+  }catch(e){}
+
+  let rt;
+  window.addEventListener('resize',()=>{clearTimeout(rt);
+    rt=setTimeout(()=>{stick();render();},150);});
+  /* Passive: this listener only reads scrollY and toggles an attribute, so it
+     must never be allowed to block the scroll itself. */
+  let sp=false;
+  window.addEventListener('scroll',()=>{ if(sp) return; sp=true;
+    requestAnimationFrame(()=>{ sp=false; onScroll(); }); },{passive:true});
+  stick(); onScroll(); render(); syncUrl();
+}
+function render(){
+  drawBreaks(); drawHeadlines(); drawAnswer(); drawKPIs(); drawSystem();
+  drawHHI(); drawFunding(); drawPeer(); drawEff(); drawBridge(); drawBump();
+  drawRank(); drawShare(); drawDuPont(); drawDrill(); drawTable();
+}
+init();
+</script>
+</body>
+</html>
